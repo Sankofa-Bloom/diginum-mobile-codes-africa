@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import NumberCard from '@/components/NumberCard';
 import LanguageToggle from '@/components/LanguageToggle';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { toast } from '@/hooks/use-toast';
 
 interface NumberOrder {
@@ -23,6 +24,7 @@ interface NumberOrder {
 const Dashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useLanguage();
   const [orders, setOrders] = React.useState<NumberOrder[]>([
     {
       id: '1',
@@ -105,6 +107,37 @@ const Dashboard = () => {
       title: 'Commande annulée',
       description: 'Votre numéro a été libéré.',
     });
+  };
+
+  const handleRequestAnotherSMS = async (orderId: string) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    // Show confirmation with discounted price (50% off)
+    const discountedPrice = Math.round(order.price * 0.5);
+    const confirmed = window.confirm(
+      `${t('dashboard.requestAnother')}?\n\nPrix réduit: ₣${discountedPrice.toLocaleString()} XAF (50% de réduction)\n\nConfirmer?`
+    );
+
+    if (confirmed) {
+      // Create a new order with discounted price
+      const newOrder: NumberOrder = {
+        id: Date.now().toString(),
+        phoneNumber: order.phoneNumber,
+        service: order.service,
+        country: order.country,
+        status: 'active',
+        expiresAt: new Date(Date.now() + 1000 * 60 * 20).toISOString(), // 20 minutes
+        createdAt: new Date().toISOString(),
+        price: discountedPrice,
+      };
+
+      setOrders(prev => [newOrder, ...prev]);
+      toast({
+        title: 'Nouveau SMS demandé!',
+        description: `Nouveau numéro activé avec 50% de réduction (₣${discountedPrice.toLocaleString()} XAF)`,
+      });
+    }
   };
 
   return (
@@ -218,12 +251,13 @@ const Dashboard = () => {
                   </div>
                 ) : (
                   activeOrders.map((order) => (
-                    <NumberCard
-                      key={order.id}
-                      order={order}
-                      onRefresh={handleRefreshOrder}
-                      onCancel={handleCancelOrder}
-                    />
+                     <NumberCard
+                       key={order.id}
+                       order={order}
+                       onRefresh={handleRefreshOrder}
+                       onCancel={handleCancelOrder}
+                       onRequestAnother={handleRequestAnotherSMS}
+                     />
                   ))
                 )}
               </TabsContent>
@@ -237,11 +271,11 @@ const Dashboard = () => {
                       Les numéros avec codes SMS reçus apparaîtront ici
                     </p>
                   </div>
-                ) : (
-                  completedOrders.map((order) => (
-                    <NumberCard key={order.id} order={order} />
-                  ))
-                )}
+                 ) : (
+                   completedOrders.map((order) => (
+                     <NumberCard key={order.id} order={order} onRequestAnother={handleRequestAnotherSMS} />
+                   ))
+                 )}
               </TabsContent>
 
               <TabsContent value="expired" className="space-y-4 mt-6">
@@ -253,11 +287,11 @@ const Dashboard = () => {
                       Les numéros non utilisés dans les temps apparaîtront ici
                     </p>
                   </div>
-                ) : (
-                  expiredOrders.map((order) => (
-                    <NumberCard key={order.id} order={order} />
-                  ))
-                )}
+                 ) : (
+                   expiredOrders.map((order) => (
+                     <NumberCard key={order.id} order={order} onRequestAnother={handleRequestAnotherSMS} />
+                   ))
+                 )}
               </TabsContent>
             </Tabs>
           </CardContent>

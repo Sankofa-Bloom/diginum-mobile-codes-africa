@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -7,9 +7,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const LanguageToggle = () => {
-  const [language, setLanguage] = useState('fr');
+  const { language, setLanguage } = useLanguage();
 
   const languages = [
     { code: 'fr', name: 'Français', flag: '🇫🇷' },
@@ -30,7 +31,7 @@ const LanguageToggle = () => {
         {languages.map((lang) => (
           <DropdownMenuItem
             key={lang.code}
-            onClick={() => setLanguage(lang.code)}
+            onClick={() => setLanguage(lang.code as 'en' | 'fr')}
             className="gap-2"
           >
             <span>{lang.flag}</span>

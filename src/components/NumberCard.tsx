@@ -1,9 +1,10 @@
 import React from 'react';
-import { Copy, Clock, Phone, CheckCircle, XCircle } from 'lucide-react';
+import { Copy, Clock, Phone, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface NumberOrder {
   id: string;
@@ -21,10 +22,12 @@ interface NumberCardProps {
   order: NumberOrder;
   onCancel?: (orderId: string) => void;
   onRefresh?: (orderId: string) => void;
+  onRequestAnother?: (orderId: string) => void;
 }
 
-const NumberCard: React.FC<NumberCardProps> = ({ order, onCancel, onRefresh }) => {
+const NumberCard: React.FC<NumberCardProps> = ({ order, onCancel, onRefresh, onRequestAnother }) => {
   const [timeLeft, setTimeLeft] = React.useState('');
+  const { t } = useLanguage();
 
   React.useEffect(() => {
     const updateTimer = () => {
@@ -161,6 +164,18 @@ const NumberCard: React.FC<NumberCardProps> = ({ order, onCancel, onRefresh }) =
               className="flex-1"
             >
               Annuler
+            </Button>
+          )}
+
+          {(order.status === 'completed' || order.status === 'expired') && onRequestAnother && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onRequestAnother(order.id)}
+              className="flex-1 gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              {t('dashboard.requestAnother')}
             </Button>
           )}
         </div>
