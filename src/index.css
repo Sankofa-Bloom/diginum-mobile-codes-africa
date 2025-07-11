@@ -2,41 +2,74 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* DigiNum Design System - Professional PWA for Virtual Numbers */
 
 @layer base {
   :root {
+    /* Core Brand Colors - Professional Navy & Green */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
+    --foreground: 215 25% 15%;
+    
+    /* Navy Blue Primary */
+    --primary: 214 84% 12%;
+    --primary-foreground: 0 0% 98%;
+    --primary-light: 214 84% 20%;
+    --primary-dark: 214 84% 8%;
+    
+    /* Success Green for Actions */
+    --success: 142 70% 45%;
+    --success-foreground: 0 0% 98%;
+    --success-light: 142 70% 55%;
+    
+    /* Professional Gray Tones */
+    --charcoal: 220 15% 25%;
+    --charcoal-light: 220 15% 35%;
+    --gray-50: 220 10% 98%;
+    --gray-100: 220 10% 95%;
+    --gray-200: 220 10% 90%;
+    --gray-300: 220 10% 80%;
+    
+    /* Semantic Colors */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
-    --radius: 0.5rem;
+    --card-foreground: 215 25% 15%;
+    --card-border: 220 10% 90%;
+    
+    --secondary: 220 10% 95%;
+    --secondary-foreground: 215 25% 15%;
+    
+    --muted: 220 10% 95%;
+    --muted-foreground: 220 8% 45%;
+    
+    --accent: 214 84% 12%;
+    --accent-foreground: 0 0% 98%;
+    
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 98%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 98%;
+    
+    --border: 220 10% 90%;
+    --input: 220 10% 90%;
+    --ring: 214 84% 12%;
+    
+    /* Mobile Money Colors */
+    --mtn-yellow: 50 100% 60%;
+    --orange-orange: 25 100% 55%;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(214 84% 12%), hsl(214 84% 20%));
+    --gradient-success: linear-gradient(135deg, hsl(142 70% 45%), hsl(142 70% 55%));
+    --gradient-hero: linear-gradient(135deg, hsl(214 84% 8%) 0%, hsl(214 84% 12%) 50%, hsl(214 84% 20%) 100%);
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(220 10% 10% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(220 10% 10% / 0.1), 0 2px 4px -1px hsl(220 10% 10% / 0.06);
+    --shadow-lg: 0 10px 15px -3px hsl(220 10% 10% / 0.1), 0 4px 6px -2px hsl(220 10% 10% / 0.05);
+    --shadow-xl: 0 20px 25px -5px hsl(220 10% 10% / 0.1), 0 10px 10px -5px hsl(220 10% 10% / 0.04);
+    
+    /* Border Radius */
+    --radius: 0.75rem;
 
     --sidebar-background: 0 0% 98%;
 
@@ -101,5 +134,94 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+}
+
+@layer components {
+  /* Button Variants */
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary-light transition-all duration-200 shadow-md hover:shadow-lg;
+  }
+  
+  .btn-success {
+    @apply bg-success text-success-foreground hover:bg-success-light transition-all duration-200 shadow-md hover:shadow-lg;
+  }
+  
+  .btn-mtn {
+    @apply bg-[hsl(var(--mtn-yellow))] text-gray-900 hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg;
+  }
+  
+  .btn-orange {
+    @apply bg-[hsl(var(--orange-orange))] text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg;
+  }
+
+  /* Card Variants */
+  .card-elevated {
+    @apply bg-card border border-card-border rounded-lg shadow-md hover:shadow-lg transition-all duration-200;
+  }
+  
+  .card-service {
+    @apply card-elevated p-4 cursor-pointer hover:scale-[1.02] hover:border-primary/20;
+  }
+  
+  .card-number {
+    @apply card-elevated p-6 border-l-4 border-l-primary;
+  }
+
+  /* Status Indicators */
+  .status-active {
+    @apply bg-success/10 text-success border border-success/20 px-3 py-1 rounded-full text-sm font-medium;
+  }
+  
+  .status-pending {
+    @apply bg-warning/10 text-warning border border-warning/20 px-3 py-1 rounded-full text-sm font-medium;
+  }
+  
+  .status-expired {
+    @apply bg-destructive/10 text-destructive border border-destructive/20 px-3 py-1 rounded-full text-sm font-medium;
+  }
+
+  /* Gradient Backgrounds */
+  .bg-gradient-primary {
+    background: var(--gradient-primary);
+  }
+  
+  .bg-gradient-success {
+    background: var(--gradient-success);
+  }
+  
+  .bg-gradient-hero {
+    background: var(--gradient-hero);
+  }
+
+  /* Mobile-First Responsive Container */
+  .container-mobile {
+    @apply max-w-sm mx-auto px-4 sm:max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl;
+  }
+
+  /* PWA Specific */
+  .safe-area-inset {
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .whatsapp-button {
+    @apply fixed bottom-6 right-6 z-50 bg-[#25D366] text-white p-4 rounded-full shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110;
+  }
+
+  /* Loading States */
+  .pulse-slow {
+    animation: pulse 2s infinite;
+  }
+  
+  .shimmer {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    animation: shimmer 1.5s infinite;
+  }
+  
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
   }
 }
