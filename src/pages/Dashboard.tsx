@@ -8,63 +8,49 @@ import NumberCard from '@/components/NumberCard';
 import LanguageToggle from '@/components/LanguageToggle';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { toast } from '@/hooks/use-toast';
+import { fetchDashboardOrders } from '@/lib/api';
 
-interface NumberOrder {
-  id: string;
-  phoneNumber: string;
-  service: string;
-  country: string;
-  status: 'active' | 'completed' | 'expired' | 'pending';
-  smsCode?: string;
-  expiresAt: string;
-  createdAt: string;
-  price: number;
-}
+
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useLanguage();
-  const [orders, setOrders] = React.useState<NumberOrder[]>([
-    {
-      id: '1',
-      phoneNumber: '+1234567890',
-      service: 'WhatsApp',
-      country: 'États-Unis',
-      status: 'completed',
-      smsCode: '123456',
-      expiresAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(), // 5 minutes ago
-      createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 minutes ago
-      price: 950,
-    },
-    {
-      id: '2',
-      phoneNumber: '+4476543210',
-      service: 'Telegram',
-      country: 'Royaume-Uni',
-      status: 'active',
-      expiresAt: new Date(Date.now() + 1000 * 60 * 15).toISOString(), // 15 minutes from now
-      createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(), // 5 minutes ago
-      price: 750,
-    },
-  ]);
+  const [orders, setOrders] = React.useState<any[]>([]);
+const [isLoading, setIsLoading] = React.useState(true);
+const [error, setError] = React.useState<string | null>(null);
 
-  const [isRefreshing, setIsRefreshing] = React.useState(false);
+const [isRefreshing, setIsRefreshing] = React.useState(false);
+
+// Fetch orders from real API on mount
+React.useEffect(() => {
+  setIsLoading(true);
+  fetchDashboardOrders()
+    .then(data => {
+      setOrders(data.orders || data); // backend may return {orders: [...]}
+      setError(null);
+    })
+    .catch(e => {
+      setError(e.message || 'Failed to load dashboard data');
+      setOrders([]);
+    })
+    .finally(() => setIsLoading(false));
+}, []);
 
   // Add new order from payment if it exists
   React.useEffect(() => {
     if (location.state?.newOrder) {
       setOrders(prev => [location.state.newOrder, ...prev]);
       toast({
-        title: 'Numéro activé!',
-        description: 'Votre numéro virtuel est prêt à recevoir des SMS.',
+        title: 'Number activated!',
+        description: 'Your virtual number is ready to receive SMS.',
       });
       // Clear the state
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
 
-  const activeOrders = orders.filter(order => order.status === 'active');
+  const activeOrders = orders.filter(order => order.status === 'active' || order.status === 'waiting');
   const completedOrders = orders.filter(order => order.status === 'completed');
   const expiredOrders = orders.filter(order => order.status === 'expired');
 
@@ -74,27 +60,25 @@ const Dashboard = () => {
   const handleRefreshOrder = async (orderId: string) => {
     setIsRefreshing(true);
     
-    // Simulate API call to check for SMS
-    setTimeout(() => {
-      // Simulate receiving SMS for demo
-      if (Math.random() > 0.5) {
-        setOrders(prev => prev.map(order => 
-          order.id === orderId 
-            ? { ...order, smsCode: '987654', status: 'completed' as const }
-            : order
-        ));
-        toast({
-          title: 'Code SMS reçu!',
-          description: 'Votre code de vérification est arrivé.',
-        });
-      } else {
-        toast({
-          title: 'Aucun SMS',
-          description: 'Aucun nouveau message. Réessayez dans quelques secondes.',
-        });
-      }
+    // Use mock API to check for SMS
+    apiMock.getSmsCode(orderId).then(({ smsCode }) => {
+      setOrders(prev => prev.map(order => 
+        order.id === orderId 
+          ? { ...order, smsCode, status: 'completed' as const }
+          : order
+      ));
+      toast({
+        title: 'SMS code received!',
+        description: 'Your verification code has arrived.',
+      });
       setIsRefreshing(false);
-    }, 1500);
+    }).catch(() => {
+      toast({
+        title: 'No SMS',
+        description: 'No new message. Try again in a few seconds.',
+      });
+      setIsRefreshing(false);
+    });
   };
 
   const handleCancelOrder = async (orderId: string) => {
@@ -104,8 +88,8 @@ const Dashboard = () => {
         : order
     ));
     toast({
-      title: 'Commande annulée',
-      description: 'Votre numéro a été libéré.',
+      title: 'Order cancelled',
+      description: 'Your number has been released.',
     });
   };
 
@@ -116,7 +100,7 @@ const Dashboard = () => {
     // Show confirmation with discounted price (50% off)
     const discountedPrice = Math.round(order.price * 0.5);
     const confirmed = window.confirm(
-      `${t('dashboard.requestAnother')}?\n\nPrix réduit: ₣${discountedPrice.toLocaleString()} XAF (50% de réduction)\n\nConfirmer?`
+      `${t('dashboard.requestAnother')}?\n\nDiscounted price: ₣${discountedPrice.toLocaleString()} XAF (50% off)\n\nConfirm?`
     );
 
     if (confirmed) {
@@ -134,11 +118,33 @@ const Dashboard = () => {
 
       setOrders(prev => [newOrder, ...prev]);
       toast({
-        title: 'Nouveau SMS demandé!',
-        description: `Nouveau numéro activé avec 50% de réduction (₣${discountedPrice.toLocaleString()} XAF)`,
+        title: 'New SMS requested!',
+        description: `New number activated with 50% discount (₣${discountedPrice.toLocaleString()} XAF)`,
       });
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-lg text-muted-foreground">Loading dashboard...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="max-w-md w-full">
+          <div className="bg-red-100 text-red-700 p-6 rounded-lg shadow text-center">
+            <div className="font-bold mb-2">Error loading dashboard</div>
+            <div className="mb-4">{error}</div>
+            <button className="btn-primary" onClick={() => window.location.reload()}>Retry</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -150,7 +156,7 @@ const Dashboard = () => {
               <div className="h-8 w-8 bg-gradient-primary rounded-lg flex items-center justify-center">
                 <Phone className="h-5 w-5 text-white" />
               </div>
-              <h1 className="text-xl font-bold">Mes Numéros</h1>
+              <h1 className="text-xl font-bold">My Numbers</h1>
             </div>
             <div className="flex items-center gap-2">
               <LanguageToggle />
@@ -160,7 +166,7 @@ const Dashboard = () => {
                 className="gap-2"
               >
                 <User className="h-4 w-4" />
-                <span className="hidden sm:inline">Profil</span>
+                <span className="hidden sm:inline">Profile</span>
               </Button>
             </div>
           </div>
@@ -179,19 +185,19 @@ const Dashboard = () => {
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-success">{activeOrders.length}</div>
-              <div className="text-sm text-muted-foreground">Actifs</div>
+              <div className="text-sm text-muted-foreground">Active</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-charcoal">₣{totalSpent.toLocaleString()}</div>
-              <div className="text-sm text-muted-foreground">Dépensé</div>
+              <div className="text-sm text-muted-foreground">Spent</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-success">{successRate}%</div>
-              <div className="text-sm text-muted-foreground">Succès</div>
+              <div className="text-sm text-muted-foreground">Success</div>
             </CardContent>
           </Card>
         </div>
@@ -203,7 +209,7 @@ const Dashboard = () => {
             className="btn-primary flex-1 h-12"
           >
             <Plus className="h-5 w-5 mr-2" />
-            Nouveau Numéro
+            New Number
           </Button>
           <Button
             variant="outline"
@@ -220,20 +226,20 @@ const Dashboard = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-primary" />
-              Historique des numéros
+              Number History
             </CardTitle>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="active" className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="active" className="gap-2">
-                  Actifs ({activeOrders.length})
+                  Active ({activeOrders.length})
                 </TabsTrigger>
                 <TabsTrigger value="completed" className="gap-2">
-                  Terminés ({completedOrders.length})
+                  Completed ({completedOrders.length})
                 </TabsTrigger>
                 <TabsTrigger value="expired" className="gap-2">
-                  Expirés ({expiredOrders.length})
+                  Expired ({expiredOrders.length})
                 </TabsTrigger>
               </TabsList>
 
@@ -241,12 +247,12 @@ const Dashboard = () => {
                 {activeOrders.length === 0 ? (
                   <div className="text-center py-8">
                     <div className="text-4xl mb-4">📱</div>
-                    <h3 className="text-lg font-semibold mb-2">Aucun numéro actif</h3>
+                    <h3 className="text-lg font-semibold mb-2">No active numbers</h3>
                     <p className="text-muted-foreground mb-4">
-                      Commandez votre premier numéro virtuel pour commencer
+                      Order your first virtual number to get started
                     </p>
                     <Button onClick={() => navigate('/buy')} className="btn-primary">
-                      Acheter maintenant
+                      Buy now
                     </Button>
                   </div>
                 ) : (
@@ -266,9 +272,9 @@ const Dashboard = () => {
                 {completedOrders.length === 0 ? (
                   <div className="text-center py-8">
                     <div className="text-4xl mb-4">✅</div>
-                    <h3 className="text-lg font-semibold mb-2">Aucun numéro terminé</h3>
+                    <h3 className="text-lg font-semibold mb-2">No completed numbers</h3>
                     <p className="text-muted-foreground">
-                      Les numéros avec codes SMS reçus apparaîtront ici
+                      Numbers with received SMS codes will appear here
                     </p>
                   </div>
                  ) : (
@@ -282,9 +288,9 @@ const Dashboard = () => {
                 {expiredOrders.length === 0 ? (
                   <div className="text-center py-8">
                     <div className="text-4xl mb-4">⏰</div>
-                    <h3 className="text-lg font-semibold mb-2">Aucun numéro expiré</h3>
+                    <h3 className="text-lg font-semibold mb-2">No expired numbers</h3>
                     <p className="text-muted-foreground">
-                      Les numéros non utilisés dans les temps apparaîtront ici
+                      Numbers not used in time will appear here
                     </p>
                   </div>
                  ) : (
@@ -303,16 +309,16 @@ const Dashboard = () => {
             <div className="flex items-start gap-4">
               <div className="text-3xl">🎁</div>
               <div className="flex-1">
-                <h3 className="font-bold text-lg mb-2">Programme de parrainage</h3>
+                <h3 className="font-bold text-lg mb-2">Referral Program</h3>
                 <p className="text-muted-foreground mb-4">
-                  Partagez DigiNum avec vos amis et gagnez ₣500 XAF pour chaque nouveau client qui effectue un achat.
+                  Share DigiNum with your friends and earn ₣500 XAF for each new customer who makes a purchase.
                 </p>
                 <div className="flex gap-3">
                   <Button variant="outline" size="sm">
-                    Mon code: DIGI2024
+                    My code: DIGI2024
                   </Button>
                   <Button variant="outline" size="sm">
-                    Partager
+                    Share
                   </Button>
                 </div>
               </div>
@@ -326,20 +332,20 @@ const Dashboard = () => {
             <div className="flex items-start gap-3">
               <div className="text-blue-500">💡</div>
               <div className="space-y-2">
-                <h3 className="font-semibold text-blue-900">Besoin d'aide ?</h3>
+                <h3 className="font-semibold text-blue-900">Need help?</h3>
                 <p className="text-blue-800 text-sm">
-                  Notre équipe support est disponible 24/7 via WhatsApp pour vous aider avec vos numéros virtuels.
+                  Our support team is available 24/7 via WhatsApp to help you with your virtual numbers.
                 </p>
                 <Button 
                   variant="outline" 
                   size="sm" 
                   className="border-blue-300 text-blue-700 hover:bg-blue-100"
                   onClick={() => {
-                    const message = encodeURIComponent("Bonjour, j'ai besoin d'aide avec mon tableau de bord DigiNum");
+                    const message = encodeURIComponent("Hello, I need help with my DigiNum dashboard");
                     window.open(`https://wa.me/237670000000?text=${message}`, '_blank');
                   }}
                 >
-                  Contacter le support
+                  Contact support
                 </Button>
               </div>
             </div>
@@ -350,4 +356,10 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+import PrivateRoute from '@/components/PrivateRoute';
+
+export default () => (
+  <PrivateRoute>
+    <Dashboard />
+  </PrivateRoute>
+);

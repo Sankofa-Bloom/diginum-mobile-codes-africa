@@ -56,7 +56,7 @@ const CountrySelect: React.FC<CountrySelectProps> = ({
               </span>
             </div>
           ) : (
-            "Sélectionnez un pays..."
+            "Select a country..."
           )}
           <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>

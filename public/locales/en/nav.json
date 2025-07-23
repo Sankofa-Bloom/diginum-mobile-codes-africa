@@ -1,0 +1,9 @@
+{
+  "nav": {
+    "home": "Home",
+    "buy": "Buy",
+    "payment": "Payment",
+    "profile": "Profile",
+    "support": "Support"
+  }
+}

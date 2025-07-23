@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
 import LanguageToggle from '@/components/LanguageToggle';
+import { createPayment } from '@/lib/campay';
 
 const Payment = () => {
   const navigate = useNavigate();
@@ -33,7 +34,7 @@ const Payment = () => {
       icon: '📱',
       color: 'bg-yellow-400',
       textColor: 'text-gray-900',
-      description: 'Payez avec votre compte MTN MoMo',
+      description: 'Pay with your MTN MoMo account',
       prefix: '+237 6',
     },
     {
@@ -42,7 +43,7 @@ const Payment = () => {
       icon: '📳',
       color: 'bg-orange-500',
       textColor: 'text-white',
-      description: 'Payez avec votre compte Orange Money',
+      description: 'Pay with your Orange Money account',
       prefix: '+237 6',
     },
   ];
@@ -50,8 +51,8 @@ const Payment = () => {
   const handlePayment = async () => {
     if (!selectedPayment || !phoneNumber) {
       toast({
-        title: 'Erreur',
-        description: 'Veuillez sélectionner un mode de paiement et saisir votre numéro.',
+        title: 'Error',
+        description: 'Please select a payment method and enter your phone number.',
         variant: 'destructive',
       });
       return;
@@ -60,37 +61,65 @@ const Payment = () => {
     setIsProcessing(true);
 
     try {
-      // Simulate payment processing
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Format phone number for Campay
+      const formattedPhone = `+237${phoneNumber.replace(/\D/g, '')}`;
       
-      // Simulate successful payment
-      toast({
-        title: 'Paiement réussi!',
-        description: 'Votre numéro virtuel est en cours de génération...',
-      });
+      // Create payment request
+      const paymentRequest = {
+        amount: orderData.totalPrice,
+        currency: 'XAF',
+        phoneNumber: formattedPhone,
+        reference: `DIGINUM-${orderData.order.id}`,
+        description: `Payment for ${orderData.service.name} number in ${orderData.country.name}`
+      };
 
-      // Navigate to dashboard with new order
-      setTimeout(() => {
-        navigate('/dashboard', {
-          state: {
-            newOrder: {
-              id: Date.now().toString(),
-              phoneNumber: '+1234567890', // Mock number
-              service: orderData.service.name,
-              country: orderData.country.name,
-              status: 'active',
-              expiresAt: new Date(Date.now() + 20 * 60 * 1000).toISOString(), // 20 minutes
-              createdAt: new Date().toISOString(),
-              price: orderData.totalPrice,
-            }
-          }
+      // Initiate Campay payment
+      const paymentResult = await createPayment(paymentRequest);
+      
+      if (paymentResult.success) {
+        toast({
+          title: 'Payment initiated!',
+          description: 'Please complete the payment on your mobile money app.',
         });
-      }, 2000);
 
+        // Start polling for payment status
+        const checkPaymentStatus = async () => {
+          try {
+            const isPaid = await verifyPayment(paymentResult.transactionId);
+            if (isPaid) {
+              toast({
+                title: 'Payment successful!',
+                description: 'Your virtual number is being generated...',
+              });
+              navigate('/dashboard', {
+                state: {
+                  newOrder: orderData.order
+                }
+              });
+            } else {
+              // Check again after 5 seconds
+              setTimeout(checkPaymentStatus, 5000);
+            }
+          } catch (error) {
+            console.error('Payment verification error:', error);
+            toast({
+              title: 'Payment error',
+              description: 'Failed to verify payment status.',
+              variant: 'destructive',
+            });
+            setIsProcessing(false);
+          }
+        };
+
+        // Start checking payment status
+        checkPaymentStatus();
+      } else {
+        throw new Error('Failed to initiate payment');
+      }
     } catch (error) {
       toast({
-        title: 'Erreur de paiement',
-        description: 'Une erreur est survenue. Veuillez réessayer.',
+        title: 'Payment error',
+        description: 'An error occurred. Please try again.',
         variant: 'destructive',
       });
       setIsProcessing(false);
@@ -120,9 +149,9 @@ const Payment = () => {
                 disabled={isProcessing}
               >
                 <ArrowLeft className="h-4 w-4" />
-                Retour
+                Back
               </Button>
-              <h1 className="text-xl font-bold">Paiement</h1>
+              <h1 className="text-xl font-bold">Payment</h1>
             </div>
             <LanguageToggle />
           </div>
@@ -136,28 +165,28 @@ const Payment = () => {
             <div className="w-6 h-6 bg-success text-white rounded-full flex items-center justify-center text-xs">
               <CheckCircle className="h-3 w-3" />
             </div>
-            <span>Sélection</span>
+            <span>Selection</span>
           </div>
           <div className="w-8 h-px bg-border"></div>
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-bold">
               2
             </div>
-            <span>Paiement</span>
+            <span>Payment</span>
           </div>
           <div className="w-8 h-px bg-border"></div>
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 bg-muted text-muted-foreground rounded-full flex items-center justify-center text-xs font-bold">
               3
             </div>
-            <span>Réception</span>
+            <span>Reception</span>
           </div>
         </div>
 
         {/* Order Summary */}
         <Card className="border-primary/20">
           <CardHeader>
-            <CardTitle>Récapitulatif de commande</CardTitle>
+            <CardTitle>Order Summary</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">

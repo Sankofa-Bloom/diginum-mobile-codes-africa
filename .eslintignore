@@ -1,0 +1,5 @@
+# Ignore generated build/service worker files
+node_modules/
+dev-dist/
+build/
+dist/

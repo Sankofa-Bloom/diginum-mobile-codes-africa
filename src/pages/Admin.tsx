@@ -54,74 +54,91 @@ interface Transaction {
 }
 
 const Admin = () => {
+  const [user, setUser] = React.useState<any>(null);
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const currentUser = await import('@/lib/auth').then(m => m.getCurrentUser());
+        if (!currentUser) {
+          navigate('/login', { replace: true });
+        } else {
+          setUser(currentUser);
+        }
+      } catch (e) {
+        navigate('/login', { replace: true });
+      }
+    })();
+  }, [navigate]);
+
+  if (!user) return null;
+
   const [searchTerm, setSearchTerm] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<string>('all');
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
-  // Mock data - In real app, this would come from API
-  const [transactions, setTransactions] = React.useState<Transaction[]>([
-    {
-      id: 'TXN001',
-      userId: 'USR001',
-      userPhone: '+237675123456',
-      service: 'WhatsApp',
-      country: 'États-Unis',
-      amount: 950,
-      status: 'completed',
-      paymentMethod: 'mtn',
-      phoneNumber: '+1234567890',
-      smsCode: '123456',
-      createdAt: '2024-01-15T10:30:00Z',
-      completedAt: '2024-01-15T10:32:00Z',
-    },
-    {
-      id: 'TXN002',
-      userId: 'USR002',
-      userPhone: '+237670987654',
-      service: 'Telegram',
-      country: 'Royaume-Uni',
-      amount: 750,
-      status: 'pending',
-      paymentMethod: 'orange',
-      phoneNumber: '+4476543210',
-      createdAt: '2024-01-15T11:15:00Z',
-    },
-    {
-      id: 'TXN003',
-      userId: 'USR001',
-      userPhone: '+237675123456',
-      service: 'Facebook',
-      country: 'France',
-      amount: 800,
-      status: 'failed',
-      paymentMethod: 'mtn',
-      createdAt: '2024-01-15T09:45:00Z',
-    },
-    {
-      id: 'TXN004',
-      userId: 'USR003',
-      userPhone: '+237691234567',
-      service: 'Instagram',
-      country: 'Allemagne',
-      amount: 850,
-      status: 'completed',
-      paymentMethod: 'orange',
-      phoneNumber: '+49123456789',
-      smsCode: '789012',
-      createdAt: '2024-01-15T08:20:00Z',
-      completedAt: '2024-01-15T08:22:00Z',
-    },
-  ]);
+  const [transactions, setTransactions] = React.useState<any[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Fetch real data from backend
+  React.useEffect(() => {
+    setIsLoading(true);
+    // Uncomment and implement this function when backend is ready
+    // fetchAdminTransactions()
+    //   .then(data => {
+    //     setTransactions(data.transactions || data);
+    //     setError(null);
+    //   })
+    //   .catch(err => {
+    //     setError(err.message);
+    //   })
+    //   .finally(() => {
+    //     setIsLoading(false);
+    //   });
+    
+    // Mock data for now
+    const mockTransactions = [
+      {
+        id: 'TXN001',
+        userId: 'user1',
+        userPhone: '+237612345678',
+        service: 'Numéro virtuel USA',
+        country: 'USA',
+        amount: 2500,
+        status: 'completed',
+        paymentMethod: 'mtn',
+        phoneNumber: '+1234567890',
+        smsCode: '123456',
+        createdAt: new Date().toISOString(),
+        completedAt: new Date().toISOString()
+      },
+      {
+        id: 'TXN002',
+        userId: 'user2',
+        userPhone: '+237698765432',
+        service: 'Numéro virtuel UK',
+        country: 'UK',
+        amount: 3000,
+        status: 'pending',
+        paymentMethod: 'orange',
+        createdAt: new Date().toISOString()
+      }
+    ];
+    
+    setTransactions(mockTransactions);
+    setIsLoading(false);
+  }, []);
 
   const stats = {
     totalTransactions: transactions.length,
     totalRevenue: transactions
       .filter(t => t.status === 'completed')
       .reduce((sum, t) => sum + t.amount, 0),
-    successRate: Math.round(
+    successRate: transactions.length > 0 ? Math.round(
       (transactions.filter(t => t.status === 'completed').length / transactions.length) * 100
-    ),
+    ) : 0,
     activeOrders: transactions.filter(t => t.status === 'pending').length,
   };
 

@@ -1,0 +1,24 @@
+{
+  "name": "diginum-backend",
+  "version": "1.0.0",
+  "description": "Backend for DigiNum PWA (Fastify, Node.js, Supabase)",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon index.js",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.0.1",
+    "@supabase/supabase-js": "^2.39.7",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.4.0",
+    "fastify-cors": "^6.1.0",
+    "fastify-env": "^2.2.0",
+    "fastify-jwt": "^4.2.0",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "support": {
+    "whatsappMessage": "Bonjour, j'ai besoin d'aide avec DigiNum",
+    "contact": {
+      "title": "Contacter le Support",
+      "description": "Besoin d'aide ? Contactez notre équipe de support via WhatsApp.",
+      "whatsapp": "Support WhatsApp",
+      "email": "Support Email",
+      "phone": "Support Téléphone"
+    },
+    "faq": {
+      "title": "Questions Fréquentes",
+      "howToBuy": {
+        "question": "Comment acheter un numéro ?",
+        "answer": "Sélectionnez votre service et votre pays, puis choisissez votre méthode de paiement préférée."
+      },
+      "paymentMethods": {
+        "question": "Quels modes de paiement sont acceptés ?",
+        "answer": "Nous acceptons les cartes de crédit Stripe et le Mobile Money (MTN MoMo, Orange Money)."
+      },
+      "numberValidity": {
+        "question": "Combien de temps le numéro est-il valide ?",
+        "answer": "Les numéros sont généralement valides pendant 24 heures à partir de l'activation."
+      }
+    }
+  }
+}

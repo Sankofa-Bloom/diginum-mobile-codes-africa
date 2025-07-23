@@ -1,0 +1,49 @@
+{
+  "buy": {
+    "title": "Acheter un numéro",
+    "description": "Sélectionnez votre service et votre pays pour obtenir un numéro temporaire",
+    "step1": {
+      "title": "Sélection du Service et du Pays",
+      "service": "Service",
+      "country": "Pays",
+      "price": "Prix",
+      "pricePerNumber": "Prix par numéro",
+      "continue": "Continuer"
+    },
+    "step2": {
+      "title": "Méthode de Paiement",
+      "paymentMethod": "Méthode de Paiement",
+      "choosePayment": "Choisir une méthode de paiement",
+      "stripe": "Carte de Crédit (Stripe)",
+      "momo": "Mobile Money",
+      "total": "Montant Total",
+      "totalAmount": "Total à payer",
+      "payNow": "Payer maintenant",
+      "processing": "Traitement...",
+      "phonePlaceholder": "Entrez votre numéro de téléphone"
+    },
+    "success": {
+      "title": "Succès !",
+      "description": "Votre numéro a été acheté avec succès. Vous pouvez le consulter dans votre tableau de bord.",
+      "paymentSuccess": "Paiement traité avec succès",
+      "numberPurchased": "Numéro acheté avec succès",
+      "goToDashboard": "Aller au tableau de bord"
+    }
+  },
+  "error": {
+    "title": "Erreur",
+    "dataLoad": "Échec du chargement des services et des pays. Veuillez réessayer.",
+    "payment": "Paiement échoué. Veuillez réessayer.",
+    "requireLogin": "Veuillez vous connecter pour continuer",
+    "stripe": {
+      "invalidCard": "Informations de carte invalides",
+      "processing": "Échec du traitement du paiement",
+      "connection": "Impossible de se connecter au service de paiement"
+    },
+    "momo": {
+      "invalidNumber": "Numéro de téléphone invalide",
+      "processing": "Paiement Mobile Money échoué",
+      "connection": "Impossible de se connecter au service de paiement"
+    }
+  }
+}
