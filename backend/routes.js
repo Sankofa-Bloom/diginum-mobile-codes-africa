@@ -5,12 +5,147 @@
  * @param {object} opts 
  */
 import { requireAuth } from './auth.js';
+import { securityMiddleware } from './middleware/security';
+
+// Configure rate limiting
+fastify.register(rateLimit, {
+  max: 100, // limit each IP to 100 requests per time window
+  timeWindow: '1 hour', // time window for rate limiting
+  keyGenerator: (request) => request.ip, // use IP address for rate limiting
+});
 
 export default async function routes(fastify, opts) {
+  // Security middleware
+  await fastify.register(securityMiddleware);
+
+  // Error handling middleware
+  fastify.setErrorHandler((error, request, reply) => {
+    if (error.statusCode) {
+      reply.code(error.statusCode);
+    } else if (error instanceof Error) {
+      reply.code(500);
+    } else {
+      reply.code(400);
+    }
+  });
+
+  // Import required modules
+  const { SMSProvider } = require('../lib/smsProvider');
+  const { supabase } = require('../supabase');
+  const smsProvider = new SMSProvider({
+    apiKey: process.env.SMS_PROVIDER_API_KEY,
+    baseUrl: 'https://sms-verification-number.com/stubs/handler_api'
+  });
+
+  // Buy data route
+  fastify.get('/api/buy-data', async (request, reply) => {
+    try {
+      const services = await smsProvider.getServices();
+      const serviceData = await Promise.all(
+        services.map(async (service) => {
+          const countries = await smsProvider.getCountries(service);
+          const countryData = await Promise.all(
+            countries.map(async (country) => {
+              const price = await smsProvider.getPrices(service, country);
+              return {
+                name: country,
+                price,
+                service,
+              };
+            })
+          );
+          return {
+            name: service,
+            countries: countryData,
+          };
+        })
+      );
+      return { services: serviceData };
+    } catch (error) {
+      fastify.log.error('Error fetching buy data:', error);
+      throw error;
+    }
+  });
+
+  // Buy number route
+  fastify.post('/api/buy-number', requireAuth, async (request, reply) => {
+    try {
+      const { country, service } = request.body;
+      const user = request.user;
+
+      // Rent number from SMS provider
+      const numberRequest = {
+        service,
+        country,
+        duration: 30, // 30 minutes default duration
+      };
+
+      const numberResponse = await smsProvider.rentNumber(numberRequest);
+
+      // Save order in Supabase
+      const { data, error } = await supabase
+        .from('orders')
+        .insert({
+          user_id: user.id,
+          number_id: numberResponse.id,
+          phone_number: numberResponse.phoneNumber,
+          country: numberResponse.country,
+          service: numberResponse.service,
+          price: numberResponse.price,
+          status: 'active',
+          expires_at: new Date(numberResponse.expiresAt),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        fastify.log.error('Error saving order:', error);
+        throw error;
+      }
+
+      return {
+        order: data,
+        number: numberResponse,
+      };
+    } catch (error) {
+      fastify.log.error('Error buying number:', error);
+      throw error;
+    }
+  });
+
+    // Never expose sensitive error details in production
+    if (process.env.NODE_ENV === 'production') {
+      return reply.send({ error: 'An error occurred' });
+    }
+    return reply.send({ error: error.message });
+  });
 
   // Auth routes
   // Supabase-powered login
-  fastify.post('/api/auth/login', async (request, reply) => {
+  fastify.post('/api/auth/login', {
+  schema: {
+    body: {
+      type: 'object',
+      required: ['email', 'password'],
+      properties: {
+        email: { type: 'string', format: 'email' },
+        password: { type: 'string', minLength: 8 }
+      }
+    }
+  },
+  attachValidation: true
+}, async (request, reply) => {
+  schema: {
+    body: {
+      type: 'object',
+      required: ['email', 'password'],
+      properties: {
+        email: { type: 'string', format: 'email' },
+        password: { type: 'string', minLength: 8 }
+      }
+    }
+  }
+}, async (request, reply) => {
     const { email, password } = request.body;
     if (!email || !password) {
       return reply.code(400).send({ error: 'Email and password are required.' });
@@ -43,7 +178,38 @@ export default async function routes(fastify, opts) {
   });
 
   // Supabase-powered registration
-  fastify.post('/api/auth/register', async (request, reply) => {
+  fastify.post('/api/auth/register', {
+  schema: {
+    body: {
+      type: 'object',
+      required: ['email', 'password'],
+      properties: {
+        email: { type: 'string', format: 'email' },
+        password: { 
+          type: 'string',
+          minLength: 8,
+          pattern: '^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$' // Require at least one letter and one number
+        }
+      }
+    }
+  },
+  attachValidation: true
+}, async (request, reply) => {
+  schema: {
+    body: {
+      type: 'object',
+      required: ['email', 'password'],
+      properties: {
+        email: { type: 'string', format: 'email' },
+        password: { 
+          type: 'string',
+          minLength: 8,
+          pattern: '^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$' // Require at least one letter and one number
+        }
+      }
+    }
+  }
+}, async (request, reply) => {
     try {
       const { email, password } = request.body;
       if (!email || !password) {
@@ -116,7 +282,7 @@ export default async function routes(fastify, opts) {
       
       // Verify webhook key
       const webhookKey = request.headers['x-webhook-key'];
-      if (!webhookKey || webhookKey !== process.env.VITE_CAMPAY_WEBHOOK_KEY) {
+      if (!webhookKey || webhookKey !== process.env.CAMPAY_WEBHOOK_KEY) {
         return reply.code(401).send({ error: 'Invalid webhook key' });
       }
 

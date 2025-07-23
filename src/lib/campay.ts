@@ -42,11 +42,11 @@ export interface WebhookNotification {
 }
 
 const getAuthConfig = (): CampayAuth => ({
-  appId: VITE_CAMPAY_APP_ID,
-  username: VITE_CAMPAY_USERNAME,
-  password: VITE_CAMPAY_PASSWORD,
-  accessToken: VITE_CAMPAY_ACCESS_TOKEN,
-  webhookKey: VITE_CAMPAY_WEBHOOK_KEY
+  appId: process.env.CAMPAY_APP_ID,
+  username: process.env.CAMPAY_USERNAME,
+  password: process.env.CAMPAY_PASSWORD,
+  accessToken: process.env.CAMPAY_ACCESS_TOKEN,
+  webhookKey: process.env.CAMPAY_WEBHOOK_KEY
 });
 
 const getHeaders = () => ({

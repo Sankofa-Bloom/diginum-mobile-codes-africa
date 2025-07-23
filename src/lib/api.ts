@@ -5,25 +5,13 @@ import { getCurrentUser } from '@/lib/auth';
 import { SMSProvider, NumberRequest } from '@/lib/smsProvider';
 import { supabase } from '@/lib/supabaseClient';
 
-// Initialize SMS provider with config from environment
-const smsProvider = new SMSProvider({
-  apiKey: import.meta.env.VITE_SMS_PROVIDER_API_KEY,
-  baseUrl: 'https://sms-verification-number.com/stubs/handler_api'
-});
-
 // Export the API object with all functions
 export const api = {
   fetchDashboardOrders,
   fetchAdminTransactions,
   fetchBuyData,
   buyNumber,
-  checkSMS,
-  getPrices: async (service: string, country: string) => {
-    return smsProvider.getPrices(service, country);
-  },
-  rentNumber: async (request: NumberRequest) => {
-    return smsProvider.rentNumber(request);
-  }
+  checkSMS
 };
 
 export async function fetchDashboardOrders() {
@@ -82,82 +70,30 @@ export async function fetchAdminTransactions() {
 }
 
 export async function fetchBuyData() {
-  try {
-    // Get available services from SMS provider
-    const services = await smsProvider.getServices();
-    
-    // Get countries and prices for each service
-    const serviceData = await Promise.all(
-      services.map(async (service) => {
-        const countries = await smsProvider.getCountries(service);
-        const countryData = await Promise.all(
-          countries.map(async (country) => {
-            const price = await smsProvider.getPrices(service, country);
-            return {
-              name: country,
-              price,
-              service,
-            };
-          })
-        );
-        return {
-          name: service,
-          countries: countryData,
-        };
-      })
-    );
-
-    return {
-      services: serviceData,
-    };
-  } catch (error) {
-    console.error('Error fetching buy data:', error);
-    throw new Error('Failed to fetch countries/services');
+  const response = await fetch('/api/buy-data');
+  if (!response.ok) {
+    throw new Error('Failed to fetch buy data');
   }
+  return response.json();
 }
 
 export async function buyNumber(country: string, service: string) {
-  const user = await getCurrentUser();
+  const user = await api.getCurrentUser();
   if (!user) {
     throw new Error('User not authenticated');
   }
 
-  try {
-    // Rent number from SMS provider
-    const numberRequest: NumberRequest = {
-      service,
-      country,
-      duration: 30, // 30 minutes default duration
-    };
+  const response = await fetch('/api/buy-number', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(user?.access_token ? { Authorization: `Bearer ${user.access_token}` } : {})
+    },
+    body: JSON.stringify({ country, service })
+  });
 
-    const numberResponse = await smsProvider.rentNumber(numberRequest);
-
-    // Save order in Supabase
-    const { data, error } = await supabase
-      .from('orders')
-      .insert({
-        user_id: user.id,
-        number_id: numberResponse.id,
-        phone_number: numberResponse.phoneNumber,
-        country: numberResponse.country,
-        service: numberResponse.service,
-        price: numberResponse.price,
-        status: 'active',
-        expires_at: new Date(numberResponse.expiresAt),
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error saving order:', error);
-      throw new Error('Failed to save order');
-    }
-
-    return {
-      order: data,
-      number: numberResponse,
-    };
-  } catch (error) {
+  if (!response.ok) {
+    throw new Error('Failed to buy number');
     console.error('Error buying number:', error);
     throw new Error('Failed to complete purchase');
   }

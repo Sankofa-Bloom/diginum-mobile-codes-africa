@@ -1,7 +1,7 @@
 {
-  "name": "DigiNum - Numéros Virtuels",
+  "name": "DigiNum - Virtual Numbers",
   "short_name": "DigiNum",
-  "description": "Achetez des numéros virtuels temporaires avec Mobile Money au Cameroun",
+  "description": "Get virtual numbers for any country",
   "theme_color": "#1e3a8a",
   "background_color": "#ffffff",
   "display": "standalone",

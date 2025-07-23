@@ -4,7 +4,7 @@ import { useSession } from '@/lib/supabaseClient';
 import { api } from '@/lib/api';
 
 // Load Stripe client
-const stripePromise = loadStripe(process.env.VITE_STRIPE_PUBLIC_KEY || '');
+const stripePromise = loadStripe(process.env.STRIPE_PUBLIC_KEY || '');
 
 export const StripeProvider = ({ children }: { children: React.ReactNode }) => {
   const { data: session } = useSession();
@@ -24,6 +24,9 @@ export const StripePaymentForm = ({ amount, onPaymentSuccess }: {
   amount: number;
   onPaymentSuccess: () => void;
 }) => {
+  if (amount <= 0) {
+    throw new Error('Amount must be greater than 0');
+  }
   const [clientSecret, setClientSecret] = React.useState<string | undefined>();
   const [error, setError] = React.useState<string | undefined>();
   const [loading, setLoading] = React.useState(false);
@@ -39,9 +42,19 @@ export const StripePaymentForm = ({ amount, onPaymentSuccess }: {
         setPaymentStatus(undefined);
         
         const response = await api.post('/api/payment/stripe', {
-          amount,
+          amount: Math.round(amount * 100), // Convert to cents
           currency: 'USD'
+        }, {
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+          }
         });
+        
+        if (!response.data.clientSecret) {
+          throw new Error('Invalid payment intent response');
+        }
+        
         setClientSecret(response.data.clientSecret);
       } catch (err: any) {
         setError('Payment failed. Please try again.');
