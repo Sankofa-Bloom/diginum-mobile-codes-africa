@@ -9,7 +9,7 @@ const Terms = () => (
       <li>Virtual numbers provided are for temporary use and may not be used for illegal activities.</li>
       <li>DigiNum is not responsible for misuse of the service or any third-party actions.</li>
       <li>We reserve the right to suspend or terminate accounts for violations of our terms.</li>
-      <li>For more information, contact us at <a href="mailto:diginum237@gmail.com" className="underline">diginum237@gmail.com</a>.</li>
+      <li>For more information, contact us on Telegram at <a href="https://t.me/Diginum" className="underline">@Diginum</a>.</li>
     </ul>
     <p>Thank you for choosing DigiNum!</p>
   </div>

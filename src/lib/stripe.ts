@@ -20,9 +20,8 @@ export const StripeProvider = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-export const StripePaymentForm = ({ amount, currency, onPaymentSuccess }: {
+export const StripePaymentForm = ({ amount, onPaymentSuccess }: {
   amount: number;
-  currency: string;
   onPaymentSuccess: () => void;
 }) => {
   const [clientSecret, setClientSecret] = React.useState<string | undefined>();
@@ -30,7 +29,7 @@ export const StripePaymentForm = ({ amount, currency, onPaymentSuccess }: {
   const [loading, setLoading] = React.useState(false);
   const [success, setSuccess] = React.useState(false);
   const [paymentStatus, setPaymentStatus] = React.useState<string | undefined>();
-  const { t } = useTranslation();
+
 
   React.useEffect(() => {
     const createPaymentIntent = async () => {
@@ -41,11 +40,11 @@ export const StripePaymentForm = ({ amount, currency, onPaymentSuccess }: {
         
         const response = await api.post('/api/payment/stripe', {
           amount,
-          currency
+          currency: 'USD'
         });
         setClientSecret(response.data.clientSecret);
       } catch (err: any) {
-        setError(t('errorPayment'));
+        setError('Payment failed. Please try again.');
         console.error('Error creating payment intent:', err);
         setPaymentStatus('error');
       } finally {
@@ -60,7 +59,7 @@ export const StripePaymentForm = ({ amount, currency, onPaymentSuccess }: {
     return (
       <div className="text-center py-4">
         <div className="animate-spin inline-block w-6 h-6 border-4 border-t-transparent border-primary rounded-full mr-2"></div>
-        <span>{t('loading')}</span>
+        <span>Loading...</span>
       </div>
     );
   }
@@ -68,7 +67,7 @@ export const StripePaymentForm = ({ amount, currency, onPaymentSuccess }: {
   return (
     <div className="space-y-4">
       <div className="text-center text-lg font-semibold">
-        {t('payWithStripe', { amount: amount.toFixed(2) })}
+        Pay with Stripe (${amount.toFixed(2)})
       </div>
       <div className="rounded-lg border p-4">
         <StripeCardElement 

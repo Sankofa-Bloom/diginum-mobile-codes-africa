@@ -151,7 +151,7 @@ const Buy = () => {
       // Convert price to USD with adjustments
       const { priceInUSD, loading, error } = useCurrencyConversion(
         basePrice,
-        'XAF', // Base currency from SMS provider
+        'USD', // Base currency
         selectedService,
         selectedCountry
       );

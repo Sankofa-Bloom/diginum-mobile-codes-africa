@@ -1,0 +1,15 @@
+{
+  "welcomeBack": "Bienvenue de retour",
+  "signIn": "Connectez-vous à votre compte DigiNum",
+  "email": "Email",
+  "password": "Mot de passe",
+  "login": "Connexion",
+  "loggingIn": "Connexion en cours...",
+  "createAccount": "Créer un compte",
+  "forgotPassword": "Mot de passe oublié ?",
+  "error": {
+    "loginFailed": "Échec de la connexion",
+    "emailRequired": "L'email est requis",
+    "passwordRequired": "Le mot de passe est requis"
+  }
+}

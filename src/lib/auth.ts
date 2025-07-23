@@ -29,3 +29,16 @@ export async function getCurrentUser() {
   if (error) throw error;
   return data.user;
 }
+
+export async function forgotPassword(email: string) {
+  const response = await fetch('/api/auth/forgot-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email })
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(result.error || 'Failed to send password reset email');
+  }
+  return result;
+}

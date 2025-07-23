@@ -8,7 +8,7 @@ const Privacy = () => (
       <li>We collect only the necessary information to provide our services.</li>
       <li>Your data is never shared with third parties except as required by law.</li>
       <li>We use industry-standard security measures to protect your data.</li>
-      <li>You may contact us at <a href="mailto:diginum237@gmail.com" className="underline">diginum237@gmail.com</a> for privacy questions.</li>
+      <li>You may contact us on Telegram at <a href="https://t.me/Diginum" className="underline">@Diginum</a> for privacy questions.</li>
     </ul>
     <p>By using DigiNum, you consent to this privacy policy.</p>
   </div>

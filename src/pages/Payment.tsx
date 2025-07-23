@@ -29,22 +29,13 @@ const Payment = () => {
 
   const paymentMethods = [
     {
-      id: 'mtn',
-      name: 'MTN Mobile Money',
+      id: 'mobile',
+      name: 'Mobile Money',
       icon: '📱',
-      color: 'bg-yellow-400',
-      textColor: 'text-gray-900',
-      description: 'Pay with your MTN MoMo account',
-      prefix: '+237 6',
-    },
-    {
-      id: 'orange',
-      name: 'Orange Money',
-      icon: '📳',
-      color: 'bg-orange-500',
+      color: 'bg-blue-500',
       textColor: 'text-white',
-      description: 'Pay with your Orange Money account',
-      prefix: '+237 6',
+      description: 'Pay with your mobile money account',
+      prefix: '+',
     },
   ];
 
@@ -67,7 +58,7 @@ const Payment = () => {
       // Create payment request
       const paymentRequest = {
         amount: orderData.totalPrice,
-        currency: 'XAF',
+        currency: 'USD',
         phoneNumber: formattedPhone,
         reference: `DIGINUM-${orderData.order.id}`,
         description: `Payment for ${orderData.service.name} number in ${orderData.country.name}`

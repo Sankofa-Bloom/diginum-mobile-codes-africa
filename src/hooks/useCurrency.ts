@@ -9,9 +9,8 @@ interface UseCurrencyResult {
 
 export function useCurrencyConversion(
   price: number,
-  fromCurrency: string,
-  service: string,
-  country: string
+  service?: string,
+  country?: string
 ): UseCurrencyResult {
   const [priceInUSD, setPriceInUSD] = useState<number>(price);
   const [loading, setLoading] = useState<boolean>(true);
@@ -24,7 +23,7 @@ export function useCurrencyConversion(
         setError(null);
 
         // Convert to USD using exchange rate
-        const usdPrice = await CurrencyService.convertPrice(price, fromCurrency);
+        const usdPrice = await CurrencyService.convertPrice(price);
 
         // Apply price adjustment
         const finalPrice = await CurrencyService.applyPriceAdjustment(

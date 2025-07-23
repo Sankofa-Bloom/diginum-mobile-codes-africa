@@ -94,7 +94,7 @@ const translations = {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguage] = useState<Language>('fr'); // Default to French for Cameroon
+  const [language, setLanguage] = useState<Language>('en'); // Default to English
 
   const t = (key: string): string => {
     return translations[language][key] || key;

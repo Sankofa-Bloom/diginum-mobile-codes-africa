@@ -4,7 +4,7 @@ import { PaymentRequest } from '../src/lib/campay';
 describe('Campay Payment Integration', () => {
   const mockPaymentRequest: PaymentRequest = {
     amount: 1000,
-    currency: 'XAF',
+    currency: 'USD',
     phoneNumber: '+237673289043',
     reference: 'TEST-123456',
     description: 'Test payment for Campay integration'

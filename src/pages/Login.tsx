@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { login } from '@/lib/auth';
 
 export default function LoginPage() {
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +17,7 @@ export default function LoginPage() {
       // Optionally redirect or show success
       window.location.href = '/dashboard';
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -65,11 +66,11 @@ export default function LoginPage() {
               className="btn-primary w-full h-11 rounded-lg font-semibold text-lg shadow-md flex items-center justify-center gap-2 disabled:opacity-60"
             >
               {loading ? <span className="animate-spin mr-2 h-5 w-5 border-2 border-t-transparent border-white rounded-full"></span> : null}
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? 'Signing in...' : 'Login'}
             </button>
             <div className="flex justify-between items-center mt-2">
-              <a href="/signup" className="text-primary text-sm hover:underline">Create account</a>
-              <a href="#" className="text-muted-foreground text-xs hover:underline">Forgot password?</a>
+              <a href="/signup" className="text-primary text-sm hover:underline">Create Account</a>
+              <a href="/forgot-password" className="text-muted-foreground text-xs hover:underline">Forgot Password?</a>
             </div>
           </form>
         </div>

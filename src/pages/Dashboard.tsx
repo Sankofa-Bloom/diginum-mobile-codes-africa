@@ -345,7 +345,7 @@ React.useEffect(() => {
                     window.open(`https://wa.me/237670000000?text=${message}`, '_blank');
                   }}
                 >
-                  Contact support
+                  Contact us on Telegram @Diginum
                 </Button>
               </div>
             </div>

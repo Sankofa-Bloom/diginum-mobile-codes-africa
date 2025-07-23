@@ -92,34 +92,24 @@ export class CurrencyService {
     if (error) throw error;
   }
 
-  static formatPrice(price: number, currency: string = 'USD'): string {
+  static formatPrice(price: number): string {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency,
+      currency: 'USD'
     }).format(price);
   }
 
   static async convertPrice(
-    price: number,
-    fromCurrency: string,
-    toCurrency: string = 'USD'
+    price: number
   ): Promise<number> {
     try {
-      // Get exchange rates for both currencies
-      const fromRate = await this.getExchangeRate(fromCurrency);
-      const toRate = await this.getExchangeRate(toCurrency);
-
-      if (!fromRate || !toRate) {
-        throw new Error(`Exchange rate not found for ${fromCurrency} or ${toCurrency}`);
+      // Return price with markup for USD
+      const rate = await this.getExchangeRate('USD');
+      if (!rate) {
+        throw new Error('Exchange rate not found for USD');
       }
 
-      // Convert price using exchange rates and markups
-      const convertedPrice = (price / fromRate.rate) * toRate.rate;
-      
-      // Apply markup from both rates
-      const finalPrice = convertedPrice * 
-        (1 + fromRate.markup) * 
-        (1 + toRate.markup);
+      const finalPrice = price * (1 + rate.markup);
 
       return parseFloat(finalPrice.toFixed(2));
     } catch (error) {
@@ -145,30 +135,17 @@ export class CurrencyService {
     }
   }
 
-  static async convertCurrency(amount: number, fromCurrency: string, toCurrency: string, isStripePayment = false): Promise<number> {
+  static async convertCurrency(amount: number, isStripePayment = false): Promise<number> {
     try {
-      // For Stripe payments, always convert to USD first
-      if (isStripePayment && fromCurrency !== 'USD') {
-        const usdAmount = await this.convertPrice(amount, fromCurrency, 'USD');
-        
-        // For Stripe, we need to account for processing fees
+      // For Stripe payments, add processing fees
+      if (isStripePayment) {
         // Stripe typically charges 2.9% + $0.30 per transaction
-        // We'll add this to the amount to ensure we cover fees
-        const stripeFee = usdAmount * 0.029 + 0.3;
-        const totalAmount = usdAmount + stripeFee;
-        
-        // If converting to another currency, convert from USD to target currency
-        if (toCurrency !== 'USD') {
-          const finalAmount = await this.convertPrice(totalAmount, 'USD', toCurrency);
-          return finalAmount;
-        }
-        
-        return totalAmount;
+        const stripeFee = amount * 0.029 + 0.3;
+        return amount + stripeFee;
       }
 
-      // For non-Stripe payments, use regular conversion
-      const response = await this.convertPrice(amount, fromCurrency, toCurrency);
-      return response;
+      // For non-Stripe payments, just return the amount
+      return amount;
     } catch (error) {
       console.error('Error converting currency:', error);
       throw error;

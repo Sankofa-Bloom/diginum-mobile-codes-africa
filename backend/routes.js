@@ -22,6 +22,26 @@ export default async function routes(fastify, opts) {
     return { token: data.session?.access_token, user: data.user };
   });
 
+  // Supabase-powered password reset
+  fastify.post('/api/auth/forgot-password', async (request, reply) => {
+    try {
+      const { email } = request.body;
+      if (!email) {
+        return reply.code(400).send({ error: 'Email is required.' });
+      }
+      const { error } = await fastify.supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${process.env.FRONTEND_URL}/auth/reset-password`,
+      });
+      if (error) {
+        return reply.code(400).send({ error: error.message });
+      }
+      return { message: 'Password reset email sent. Please check your inbox.' };
+    } catch (err) {
+      console.error('Password reset error:', err);
+      return reply.code(500).send({ error: 'Failed to send password reset email' });
+    }
+  });
+
   // Supabase-powered registration
   fastify.post('/api/auth/register', async (request, reply) => {
     try {
@@ -107,6 +127,11 @@ export default async function routes(fastify, opts) {
         .eq('reference', reference)
         .single();
 
+      // Only accept USD payments
+      if (currency !== 'USD') {
+        return reply.code(400).send({ error: 'Only USD payments are accepted' });
+      }
+
       if (orderError || !order) {
         console.error('Order not found for reference:', reference);
         return reply.code(404).send({ error: 'Order not found' });
@@ -114,6 +139,16 @@ export default async function routes(fastify, opts) {
 
       // Update order status based on payment status
       const newStatus = status === 'completed' ? 'completed' : 'failed';
+
+      // Update order amount with Stripe fees if applicable
+      if (status === 'completed') {
+        const stripeFee = amount * 0.029 + 0.3;
+        const finalAmount = amount + stripeFee;
+        await fastify.supabase
+          .from('orders')
+          .update({ amount: finalAmount })
+          .eq('id', order.id);
+      }
       const { error: updateError } = await fastify.supabase
         .from('orders')
         .update({ status: newStatus })
@@ -129,7 +164,6 @@ export default async function routes(fastify, opts) {
         transactionId,
         status,
         amount,
-        currency,
         phoneNumber,
         reference,
         orderId: order.id

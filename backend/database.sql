@@ -26,10 +26,7 @@ CREATE INDEX IF NOT EXISTS idx_price_adjustments_service_country ON price_adjust
 -- Insert default exchange rates
 INSERT INTO exchange_rates (currency, rate, markup)
 VALUES 
-  ('USD', 1.00, 0),
-  ('EUR', 0.85, 0.05),
-  ('GBP', 0.75, 0.05),
-  ('XAF', 580.00, 0.10)
+  ('USD', 1.00, 0)
 ON CONFLICT (currency) DO UPDATE SET
   rate = EXCLUDED.rate,
   markup = EXCLUDED.markup,

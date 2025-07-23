@@ -1,0 +1,15 @@
+{
+  "welcomeBack": "Welcome Back",
+  "signIn": "Sign in to your DigiNum account",
+  "email": "Email",
+  "password": "Password",
+  "login": "Login",
+  "loggingIn": "Logging in...",
+  "createAccount": "Create account",
+  "forgotPassword": "Forgot password?",
+  "error": {
+    "loginFailed": "Login failed",
+    "emailRequired": "Email is required",
+    "passwordRequired": "Password is required"
+  }
+}
