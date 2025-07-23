@@ -8,8 +8,14 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "vercel-build": "npm run build && cd backend && npm install --production",
+    "start": "node backend/index.js"
   },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "cacheDirectories": ["node_modules", "backend/node_modules"],
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",

@@ -1,16 +1,20 @@
 import { supabase } from './supabaseClient';
+import { API_BASE_URL } from '@/config';
 
 export async function signup(email: string, password: string) {
-  const response = await fetch('/api/auth/register', {
+  const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ email, password }),
+    credentials: 'include'
   });
-  const result = await response.json();
+  
   if (!response.ok) {
-    throw new Error(result.error || 'Registration failed');
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || 'Registration failed');
   }
-  return result;
+  
+  return response.json();
 }
 
 export async function login(email: string, password: string) {

@@ -1,3 +1,6 @@
+// API configuration
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+
 // Campay configuration
 export const SMS_PROVIDER_BASE_URL = import.meta.env.VITE_SMS_PROVIDER_BASE_URL || 'https://sms-verification-number.com/stubs/handler_api';
 

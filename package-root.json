@@ -1,0 +1,20 @@
+{
+  "name": "diginum-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "cd .. && npm run dev",
+    "build:frontend": "cd .. && npm run build",
+    "preview:frontend": "cd .. && npm run preview",
+    "dev:backend": "cd backend && npm run dev",
+    "start:backend": "cd backend && npm start",
+    "install:all": "npm install && cd backend && npm install",
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "build": "npm run build:frontend",
+    "start": "npm run start:backend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.0.1"
+  },
+  "workspaces": [".", "backend"]
+}
