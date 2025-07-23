@@ -1,21 +1,23 @@
 
+import rateLimit from '@fastify/rate-limit';
+import { requireAuth } from './auth.js';
+import securityMiddleware from './middleware/security.js';
+import { supabase } from './supabase.js';
+
 /**
  * Registers all DigiNum API routes on the provided Fastify instance.
- * @param {FastifyInstance} fastify 
+ * @param {import('fastify').FastifyInstance} fastify 
  * @param {object} opts 
  */
-import { requireAuth } from './auth.js';
-import { securityMiddleware } from './middleware/security';
-
-// Configure rate limiting
-fastify.register(rateLimit, {
-  max: 100, // limit each IP to 100 requests per time window
-  timeWindow: '1 hour', // time window for rate limiting
-  keyGenerator: (request) => request.ip, // use IP address for rate limiting
-});
-
 export default async function routes(fastify, opts) {
-  // Security middleware
+  // Configure rate limiting
+  await fastify.register(rateLimit, {
+    max: 100, // limit each IP to 100 requests per time window
+    timeWindow: '1 hour', // time window for rate limiting
+    keyGenerator: (request) => request.ip, // use IP address for rate limiting
+  });
+  
+  // Register security middleware
   await fastify.register(securityMiddleware);
 
   // Error handling middleware
@@ -29,142 +31,147 @@ export default async function routes(fastify, opts) {
     }
   });
 
-  // Import required modules
-  const { SMSProvider } = require('../lib/smsProvider');
-  const { supabase } = require('../supabase');
-  const smsProvider = new SMSProvider({
-    apiKey: process.env.SMS_PROVIDER_API_KEY,
-    baseUrl: 'https://sms-verification-number.com/stubs/handler_api'
+  // SMS provider initialization will be added here when implemented
+
+  // Auth routes
+  fastify.post('/api/auth/login', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['email', 'password'],
+        properties: {
+          email: { type: 'string', format: 'email' },
+          password: { type: 'string', minLength: 8 }
+        }
+      }
+    },
+    attachValidation: true
+  }, async (request, reply) => {
+    try {
+      if (request.validationError) {
+        return reply.status(400).send({
+          error: 'Validation error',
+          details: request.validationError.validation
+        });
+      }
+
+      const { email, password } = request.body;
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      fastify.log.error('Login error:', error);
+      throw error;
+    }
   });
+
+  // Handle both /signup and /register for backward compatibility
+  const handleSignup = async (request, reply) => {
+    try {
+      const { email, password } = request.body;
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      fastify.log.error('Registration error:', error);
+      throw error;
+    }
+  };
+
+  // Logout endpoint
+  fastify.post('/api/auth/logout', async (request, reply) => {
+    try {
+      // Clear any session tokens
+      reply.clearCookie('sb-access-token');
+      reply.clearCookie('sb-refresh-token');
+      
+      // Invalidate the session on the client side
+      reply.header('Clear-Site-Data', '"cookies", "storage", "executionContexts"');
+      
+      return { success: true, message: 'Logged out successfully' };
+    } catch (error) {
+      fastify.log.error('Logout error:', error);
+      throw new Error('Failed to log out');
+    }
+  });
+
+  // Register both endpoints pointing to the same handler
+  fastify.post('/api/auth/signup', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['email', 'password'],
+        properties: {
+          email: { type: 'string', format: 'email' },
+          password: { type: 'string', minLength: 8 }
+        }
+      }
+    },
+    attachValidation: true
+  }, handleSignup);
+
+  fastify.post('/api/auth/register', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['email', 'password'],
+        properties: {
+          email: { type: 'string', format: 'email' },
+          password: { type: 'string', minLength: 8 }
+        }
+      }
+    },
+    attachValidation: true
+  }, handleSignup);
 
   // Buy data route
   fastify.get('/api/buy-data', async (request, reply) => {
+    // Implementation for buy-data
+    return { message: 'Buy data endpoint' };
+  });
+
+  // Buy number route - Currently disabled as SMS provider is not implemented
+  fastify.post('/api/buy-number', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['country', 'service'],
+        properties: {
+          country: { type: 'string' },
+          service: { type: 'string' }
+        }
+      }
+    },
+    preHandler: requireAuth
+  }, async (request, reply) => {
     try {
-      const services = await smsProvider.getServices();
-      const serviceData = await Promise.all(
-        services.map(async (service) => {
-          const countries = await smsProvider.getCountries(service);
-          const countryData = await Promise.all(
-            countries.map(async (country) => {
-              const price = await smsProvider.getPrices(service, country);
-              return {
-                name: country,
-                price,
-                service,
-              };
-            })
-          );
-          return {
-            name: service,
-            countries: countryData,
-          };
-        })
-      );
-      return { services: serviceData };
+      // Return a 501 Not Implemented response
+      reply.status(501).send({
+        error: 'Not Implemented',
+        message: 'Phone number purchasing is currently not available. Please check back later.'
+      });
     } catch (error) {
-      fastify.log.error('Error fetching buy data:', error);
+      fastify.log.error('Error in buy-number route:', error);
       throw error;
     }
   });
 
-  // Buy number route
-  fastify.post('/api/buy-number', requireAuth, async (request, reply) => {
-    try {
-      const { country, service } = request.body;
-      const user = request.user;
-
-      // Rent number from SMS provider
-      const numberRequest = {
-        service,
-        country,
-        duration: 30, // 30 minutes default duration
-      };
-
-      const numberResponse = await smsProvider.rentNumber(numberRequest);
-
-      // Save order in Supabase
-      const { data, error } = await supabase
-        .from('orders')
-        .insert({
-          user_id: user.id,
-          number_id: numberResponse.id,
-          phone_number: numberResponse.phoneNumber,
-          country: numberResponse.country,
-          service: numberResponse.service,
-          price: numberResponse.price,
-          status: 'active',
-          expires_at: new Date(numberResponse.expiresAt),
-        })
-        .select()
-        .single();
-
-      if (error) {
-        fastify.log.error('Error saving order:', error);
-        throw error;
-      }
-
-      return {
-        order: data,
-        number: numberResponse,
-      };
-    } catch (error) {
-      fastify.log.error('Error buying number:', error);
-      throw error;
-    }
-  });
-
-    // Never expose sensitive error details in production
-    if (process.env.NODE_ENV === 'production') {
-      return reply.send({ error: 'An error occurred' });
-    }
-    return reply.send({ error: error.message });
-  });
-
-  // Auth routes
-  // Supabase-powered login
-  fastify.post('/api/auth/login', {
-  schema: {
-    body: {
-      type: 'object',
-      required: ['email', 'password'],
-      properties: {
-        email: { type: 'string', format: 'email' },
-        password: { type: 'string', minLength: 8 }
-      }
-    }
-  },
-  attachValidation: true
-}, async (request, reply) => {
-  schema: {
-    body: {
-      type: 'object',
-      required: ['email', 'password'],
-      properties: {
-        email: { type: 'string', format: 'email' },
-        password: { type: 'string', minLength: 8 }
-      }
-    }
-  }
-}, async (request, reply) => {
-    const { email, password } = request.body;
-    if (!email || !password) {
-      return reply.code(400).send({ error: 'Email and password are required.' });
-    }
-    const { data, error } = await fastify.supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      return reply.code(401).send({ error: error.message });
-    }
-    return { token: data.session?.access_token, user: data.user };
-  });
-
-  // Supabase-powered password reset
+  // Password reset endpoint
   fastify.post('/api/auth/forgot-password', async (request, reply) => {
     try {
       const { email } = request.body;
       if (!email) {
         return reply.code(400).send({ error: 'Email is required.' });
       }
-      const { error } = await fastify.supabase.auth.resetPasswordForEmail(email, {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${process.env.FRONTEND_URL}/auth/reset-password`,
       });
       if (error) {
@@ -174,64 +181,6 @@ export default async function routes(fastify, opts) {
     } catch (err) {
       console.error('Password reset error:', err);
       return reply.code(500).send({ error: 'Failed to send password reset email' });
-    }
-  });
-
-  // Supabase-powered registration
-  fastify.post('/api/auth/register', {
-  schema: {
-    body: {
-      type: 'object',
-      required: ['email', 'password'],
-      properties: {
-        email: { type: 'string', format: 'email' },
-        password: { 
-          type: 'string',
-          minLength: 8,
-          pattern: '^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$' // Require at least one letter and one number
-        }
-      }
-    }
-  },
-  attachValidation: true
-}, async (request, reply) => {
-  schema: {
-    body: {
-      type: 'object',
-      required: ['email', 'password'],
-      properties: {
-        email: { type: 'string', format: 'email' },
-        password: { 
-          type: 'string',
-          minLength: 8,
-          pattern: '^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$' // Require at least one letter and one number
-        }
-      }
-    }
-  }
-}, async (request, reply) => {
-    try {
-      const { email, password } = request.body;
-      if (!email || !password) {
-        return reply.code(400).send({ error: 'Email and password are required.' });
-      }
-      const { data, error } = await fastify.supabase.auth.signUp({ email, password });
-      if (error) {
-        return reply.code(400).send({ error: error.message });
-      }
-      const userId = data.user?.id;
-      if (!userId) {
-        return reply.code(500).send({ error: 'Failed to get user id from Supabase.' });
-      }
-      const { error: insertError } = await fastify.supabase
-        .from('users')
-        .insert([{ id: userId, email, wallet: 0 }]);
-      if (insertError) {
-        return reply.code(500).send({ error: 'User created in auth but failed to insert in users table: ' + insertError.message });
-      }
-      return { user: { id: userId, email, wallet: 0 }, message: 'Registration successful. Please check your email to confirm.' };
-    } catch (err) {
-      return reply.code(500).send({ error: err.message || 'Internal server error' });
     }
   });
 

@@ -1,25 +1,62 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { login } from '@/lib/auth';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
-
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get('redirect') || '/';
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isMounted, setIsMounted] = useState(true);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      setIsMounted(false);
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    
+    if (!email || !password) {
+      setError('Please enter both email and password');
+      return;
+    }
+    
     setError(null);
+    setIsLoading(true);
+    
     try {
-      await login(email, password);
-      // Optionally redirect or show success
-      window.location.href = '/dashboard';
+      await login(email.trim(), password);
+      
+      if (!isMounted) return;
+      
+      toast.success('Login successful!');
+      navigate(redirectTo, { replace: true });
+      
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please check your credentials.');
+      if (!isMounted) return;
+      
+      const errorMessage = err.message.includes('Invalid login credentials')
+        ? 'Invalid email or password. Please try again.'
+        : err.message || 'An error occurred during login. Please try again.';
+      
+      setError(errorMessage);
+      toast.error(errorMessage);
+      
     } finally {
-      setLoading(false);
+      if (isMounted) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -59,18 +96,54 @@ export default function LoginPage() {
                 required
               />
             </div>
-            {error && <div className="text-destructive text-sm mb-2 text-center">{error}</div>}
-            <button
+            {error && (
+              <div className="text-destructive text-sm mb-2 text-center p-2 bg-destructive/10 rounded-md">
+                {error}
+              </div>
+            )}
+            <Button
               type="submit"
-              disabled={loading}
-              className="btn-primary w-full h-11 rounded-lg font-semibold text-lg shadow-md flex items-center justify-center gap-2 disabled:opacity-60"
+              disabled={isLoading}
+              className="w-full py-2 h-11 text-base font-medium"
             >
-              {loading ? <span className="animate-spin mr-2 h-5 w-5 border-2 border-t-transparent border-white rounded-full"></span> : null}
-              {loading ? 'Signing in...' : 'Login'}
-            </button>
-            <div className="flex justify-between items-center mt-2">
-              <a href="/signup" className="text-primary text-sm hover:underline">Create Account</a>
-              <a href="/forgot-password" className="text-muted-foreground text-xs hover:underline">Forgot Password?</a>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                'Sign In'
+              )}
+            </Button>
+            
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  OR
+                </span>
+              </div>
+            </div>
+            
+            <div className="text-center text-sm text-muted-foreground">
+              Don't have an account?{' '}
+              <a 
+                href={`/signup${redirectTo ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`}
+                className="text-primary hover:underline font-medium transition-colors"
+              >
+                Create an account
+              </a>
+            </div>
+            
+            <div className="text-center text-sm text-muted-foreground mt-2">
+              <a 
+                href="/forgot-password"
+                className="text-primary hover:underline font-medium transition-colors"
+              >
+                Forgot password?
+              </a>
             </div>
           </form>
         </div>

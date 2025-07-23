@@ -1,6 +1,4 @@
-import { rateLimit } from 'fastify-rate-limit';
-import helmet from 'fastify-helmet';
-import cors from 'fastify-cors';
+import helmet from '@fastify/helmet';
 
 export default async function securityMiddleware(fastify, opts) {
   // Security headers
@@ -45,20 +43,7 @@ export default async function securityMiddleware(fastify, opts) {
     xssFilter: true,
   });
 
-  // CORS policy
-  fastify.register(cors, {
-    origin: process.env.FRONTEND_URL,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-Token'],
-  });
-
-  // Rate limiting
-  fastify.register(rateLimit, {
-    max: 100, // limit each IP to 100 requests per time window
-    timeWindow: '1 hour', // time window for rate limiting
-    keyGenerator: (request) => request.ip, // use IP address for rate limiting
-  });
+  // Rate limiting is configured in routes.js
 
   // CSRF protection
   fastify.addHook('onRequest', async (request, reply) => {
