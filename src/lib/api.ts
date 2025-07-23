@@ -53,7 +53,7 @@ export async function fetchDashboardOrders() {
             const status = await smsProvider.getNumberStatus(order.number_id);
             return { ...order, status: status.status };
           } catch (error) {
-            logger.error('Error checking number status:', error);
+            console.error('Error checking number status:', error);
             return order;
           }
         }
@@ -63,7 +63,7 @@ export async function fetchDashboardOrders() {
 
     return updatedOrders;
   } catch (error) {
-    logger.error('Error fetching dashboard orders:', error);
+    console.error('Error fetching dashboard orders:', error);
     throw new Error('Failed to fetch dashboard data');
   }
 }
@@ -71,7 +71,6 @@ export async function fetchDashboardOrders() {
 export async function fetchAdminTransactions() {
   const user = await getCurrentUser();
   const token = user?.access_token || user?.session?.access_token;
-  const response = await api.get('/api/admin', {
   const response = await fetch('/api/admin', {
     credentials: 'include',
     headers: token ? { Authorization: `Bearer ${token}` } : {},

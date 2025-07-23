@@ -1,16 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, Link, useNavigate } from 'react-router-dom';
-import { MessageCircle, User, LogOut } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getCurrentUser, logout } from '@/lib/auth';
 import Footer from './Footer';
-import BottomNav from './BottomNav';
-import { useTranslation } from 'react-i18next';
 
 const Layout = () => {
-  const { t } = useTranslation();
   const openWhatsApp = () => {
-    const message = encodeURIComponent(t('support.whatsappMessage'));
+    const message = encodeURIComponent("Bonjour, j'ai besoin d'aide avec DigiNum");
     window.open(`https://wa.me/237673289043?text=${message}`, '_blank');
   };
 
@@ -29,67 +26,50 @@ const Layout = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Mobile Header */}
-      <nav className="w-full flex items-center justify-between px-4 py-3 bg-white/95 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
+    <div className="min-h-screen bg-background">
+      {/* Unified Main Navigation Bar */}
+      <nav className="w-full flex items-center justify-between px-6 py-3 bg-white shadow-sm sticky top-0 z-50">
+        {/* Logo and Brand */}
         <div className="flex items-center gap-3">
           <Link to="/">
-            <img src="/logo.svg" alt="DigiNum Logo" className="h-8 w-8" />
+            <img src="/logo.svg" alt="DigiNum Logo" className="h-9 w-9" />
           </Link>
-          <Link to="/" className="text-xl font-bold text-primary tracking-tight hover:opacity-90">DigiNum</Link>
+          <Link to="/" className="text-2xl font-bold text-primary tracking-tight hover:opacity-90">DigiNum</Link>
         </div>
+        {/* Main Menu Links */}
+        <div className="flex items-center gap-6">
+          <Link to="/" className="text-base font-medium text-foreground hover:text-primary transition">Home</Link>
+          <Link to="/buy" className="text-base font-medium text-foreground hover:text-primary transition">Buy</Link>
+          {user && (
+            <Link to="/dashboard" className="text-base font-medium text-foreground hover:text-primary transition">Dashboard</Link>
+          )}
+        </div>
+        {/* Auth/User Actions */}
         <div className="flex items-center gap-4">
           {user ? (
             <>
-              <Button variant="ghost" onClick={handleLogout} className="p-1">
-                <LogOut className="h-5 w-5" />
-              </Button>
-              <Button variant="ghost" className="p-1">
-                <User className="h-5 w-5" />
-              </Button>
+              <span className="text-gray-700 text-sm font-medium">{user.email}</span>
+              <Button onClick={handleLogout} size="sm" variant="outline">Logout</Button>
             </>
           ) : (
             <>
-              <Link to="/login">
-                <Button variant="ghost" className="p-1">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                    <circle cx="8.5" cy="7" r="4" />
-                    <line x1="20" y1="8" x2="20" y2="16" />
-                    <line x1="23" y1="11" x2="17" y2="11" />
-                  </svg>
-                </Button>
-              </Link>
-              <Link to="/register">
-                <Button className="bg-primary text-white px-3 py-1.5">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                    <line x1="12" y1="3" x2="12" y2="7" />
-                    <line x1="12" y1="11" x2="12" y2="17" />
-                  </svg>
-                </Button>
-              </Link>
+              <Link to="/login" className="btn-primary px-4 py-2 rounded-lg font-semibold text-white shadow hover:opacity-90 transition">Login</Link>
+              <Link to="/signup" className="px-4 py-2 rounded-lg font-semibold text-primary border border-primary shadow hover:bg-primary hover:text-white transition">Sign Up</Link>
             </>
           )}
-          <Button variant="ghost" onClick={openWhatsApp} className="p-1">
-            <MessageCircle className="h-5 w-5" />
-          </Button>
         </div>
       </nav>
-
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
-        <Outlet />
-      </main>
-
-      {/* Bottom Navigation */}
-      <BottomNav />
-
-      {/* Mobile Footer */}
-      <Footer className="mt-auto" />
-    </div>
-  );
+      <Outlet />
+      {/* WhatsApp Support Button - floating bottom right */}
+      <Button 
+        onClick={openWhatsApp}
+        className="whatsapp-button fixed bottom-6 right-6 rounded-full shadow-lg bg-green-500 hover:bg-green-600 text-white p-0 h-14 w-14 flex items-center justify-center z-50"
+        size="lg"
+        style={{ boxShadow: '0 4px 24px rgba(34,197,94,0.25)' }}
+      >
+        <MessageCircle className="h-7 w-7" />
+      </Button>
+      <Footer />
     </div>
   );
 };

@@ -3,43 +3,23 @@ import { format } from 'winston';
 import { transports } from 'winston';
 import { json } from 'winston';
 
-const isProduction = process.env.NODE_ENV === 'production';
-const logLevel = VITE_ENABLE_DEBUG_LOGGING ? 'debug' : 'info';
+const { combine, timestamp, printf } = format;
+
+const logFormat = printf(({ level, message, timestamp, ...meta }) => {
+  return `${timestamp} ${level}: ${message} ${Object.keys(meta).length ? JSON.stringify(meta) : ''}`;
+});
 
 const logger = createLogger({
-  level: logLevel,
-  format: format.combine(
-    format.timestamp(),
-    format.json(),
-    format.printf(info => {
-      return `${info.timestamp} [${info.level.toUpperCase()}] ${info.message}`;
-    })
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+  format: combine(
+    timestamp(),
+    logFormat
   ),
   transports: [
-    new transports.Console({
-      format: format.combine(
-        format.colorize(),
-        format.printf(info => {
-          return `${info.timestamp} [${info.level.toUpperCase()}] ${info.message}`;
-        })
-      )
-    }),
-    new transports.File({ 
-      filename: 'error.log', 
-      level: 'error',
-      format: format.combine(
-        format.timestamp(),
-        format.json()
-      )
-    }),
-    new transports.File({ 
-      filename: 'combined.log',
-      format: format.combine(
-        format.timestamp(),
-        format.json()
-      )
-    })
-  ]
+    new transports.Console(),
+    new transports.File({ filename: 'error.log', level: 'error' }),
+    new transports.File({ filename: 'combined.log' }),
+  ],
 });
 
 export const logPaymentEvent = (type: string, data: any) => {
