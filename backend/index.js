@@ -21,9 +21,9 @@ fastify.get('/health', async (request, reply) => {
 import { supabase } from './supabase.js';
 fastify.decorate('supabase', supabase);
 
-// Register all DigiNum API routes
+// Register all DigiNum API routes with /api prefix
 import routes from './routes.js';
-await fastify.register(routes);
+await fastify.register(routes, { prefix: '/api' });
 
 const PORT = process.env.PORT || 4000;
 

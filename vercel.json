@@ -20,14 +20,18 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/backend/$1"
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/backend/(.*)",
+      "dest": "/api/$1"
     },
     {
       "src": "/(.*)\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|map|json|webmanifest)$",
       "dest": "/$1"
     },
     {
-      "src": "^/(?!api).*",
+      "src": "^/(?!api|backend).*",
       "dest": "/index.html"
     }
   ]

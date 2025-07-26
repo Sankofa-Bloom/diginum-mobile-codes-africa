@@ -104,7 +104,7 @@ export default async function routes(fastify, opts) {
   });
 
   // Register both endpoints pointing to the same handler
-  fastify.post('/api/auth/signup', {
+  fastify.post('/auth/signup', {
     schema: {
       body: {
         type: 'object',
@@ -118,7 +118,7 @@ export default async function routes(fastify, opts) {
     attachValidation: true
   }, handleSignup);
 
-  fastify.post('/api/auth/register', {
+  fastify.post('/auth/register', {
     schema: {
       body: {
         type: 'object',
