@@ -7,7 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { LanguageProvider } from "./contexts/LanguageContext";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
-import Buy from "./pages/Buy";
+import BuyPage from "./pages/BuyPage";
 import Payment from "./pages/Payment";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
@@ -94,7 +94,7 @@ function AppRoutes() {
           path="buy" 
           element={
             <ProtectedRoute>
-              <Buy />
+              <BuyPage />
             </ProtectedRoute>
           } 
         />

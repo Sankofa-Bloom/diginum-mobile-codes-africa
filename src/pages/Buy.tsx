@@ -78,9 +78,15 @@ function BuyButton({
         <DialogHeader>
           <DialogTitle>Confirm Purchase</DialogTitle>
           <DialogDescription className="mt-2">
-            You are about to purchase <span className="font-semibold">{serviceTitle}</span> for 
-            <span className="font-semibold"> ${price.toFixed(2)}</span>.
-            <p className="mt-2">Are you sure you want to continue?</p>
+            {price === undefined || isNaN(price) ? (
+              <span className="text-red-500">Error: Invalid price</span>
+            ) : (
+              <>
+                You are about to purchase <span className="font-semibold">{serviceTitle}</span> for 
+                <span className="font-semibold"> ${price.toFixed(2)}</span>.
+                <p className="mt-2">Are you sure you want to continue?</p>
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="flex justify-end gap-4 mt-6">
