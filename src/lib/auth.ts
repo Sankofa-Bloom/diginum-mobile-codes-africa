@@ -6,15 +6,10 @@ export async function signup(email: string, password: string) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
     
-    // Clean up the base URL to avoid double slashes
-    const baseUrl = API_BASE_URL.endsWith('/') 
-      ? API_BASE_URL.slice(0, -1) 
-      : API_BASE_URL;
+    // Use the new API route
+    const apiUrl = '/api/auth/signup';
     
-    // Use the signup endpoint which is confirmed to exist
-    const apiUrl = `${baseUrl}/auth/signup`;
-    
-    console.log('Making request to:', apiUrl); // Debug log
+    console.log('Making request to:', apiUrl);
     
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -26,32 +21,34 @@ export async function signup(email: string, password: string) {
         email: email.trim(), 
         password: password.trim() 
       }),
-      credentials: 'include',
+      credentials: 'same-origin',
       signal: controller.signal
     });
     
     clearTimeout(timeoutId);
     
-    console.log('Response status:', response.status); // Debug log
+    console.log('Response status:', response.status);
+    
+    const responseData = await response.json().catch(() => ({}));
     
     if (!response.ok) {
-      let errorMessage = 'Registration failed';
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.message || errorMessage;
-      } catch (e) {
-        errorMessage = response.statusText || errorMessage;
-      }
+      const errorMessage = responseData.message || 'Registration failed';
+      console.error('Signup error:', errorMessage);
       throw new Error(errorMessage);
     }
     
-    return await response.json();
+    // If we have a session, set it in the client
+    if (responseData.session) {
+      const { data: { session } } = await supabase.auth.setSession(responseData.session);
+      return { user: session?.user };
+    }
+    
+    return { user: responseData.user };
   } catch (error) {
     console.error('Signup error:', error);
     if (error.name === 'AbortError') {
       throw new Error('Request timed out. Please try again.');
     }
-    // Return a more user-friendly message for network errors
     if (error.message.includes('Failed to fetch')) {
       throw new Error('Unable to connect to the server. Please check your internet connection.');
     }

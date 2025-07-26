@@ -20,6 +20,8 @@
   "cacheDirectories": ["node_modules", "backend/node_modules"],
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
+    "next": "^14.1.0",
+    "@supabase/supabase-js": "^2.39.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
     "@radix-ui/react-aspect-ratio": "^1.1.0",
@@ -82,9 +84,11 @@
   "devDependencies": {
     "@eslint/js": "^9.9.0",
     "@tailwindcss/typography": "^0.5.15",
-    "@types/node": "^22.5.5",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
+    "@types/node": "^20.11.19",
+    "@types/react": "^18.2.56",
+    "@types/react-dom": "^18.2.19",
+    "@types/next": "^14.0.1",
+    "@vercel/node": "^4.1.8",
     "@typescript-eslint/eslint-plugin": "^8.36.0",
     "@typescript-eslint/parser": "^8.36.0",
     "@vitejs/plugin-react-swc": "^3.5.0",
