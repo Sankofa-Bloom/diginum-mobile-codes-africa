@@ -160,25 +160,34 @@ export async function forgotPassword(email: string) {
     
     const response = await fetch('/api/auth/forgot-password', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: JSON.stringify({ email }),
+      credentials: 'same-origin',
       signal: controller.signal
     });
     
     clearTimeout(timeoutId);
     
-    const result = await response.json().catch(() => ({}));
+    const responseData = await response.json().catch(() => ({}));
     
     if (!response.ok) {
-      throw new Error(result.error || 'Failed to send password reset email');
+      const errorMessage = responseData.message || 'Failed to send password reset email';
+      console.error('Password reset error:', errorMessage);
+      throw new Error(errorMessage);
     }
     
-    return result;
+    return { success: true, message: responseData.message };
   } catch (error) {
     console.error('Password reset error:', error);
     if (error.name === 'AbortError') {
       throw new Error('Request timed out. Please try again.');
     }
-    throw new Error(error.message || 'Failed to process password reset request');
+    if (error.message.includes('Failed to fetch')) {
+      throw new Error('Unable to connect to the server. Please check your internet connection.');
+    }
+    throw error;
   }
 }
