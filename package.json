@@ -9,8 +9,9 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "vercel-build": "npm run build && cd backend && npm install --production",
-    "start": "node backend/index.js"
+    "build:backend": "node backend/build.js",
+    "vercel-build": "npm run build && npm run build:backend",
+    "start": "node .output/index.js"
   },
   "engines": {
     "node": ">=16.0.0"
