@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { getCurrentUser } from '@/lib/auth';
+import apiClient from '@/lib/apiClient';
 
 type BuyButtonProps = {
   serviceId: number;
@@ -18,8 +19,8 @@ function BuyButton({
   price,
   sellerId
 }: BuyButtonProps) {
-  const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleBuy = async () => {
@@ -34,30 +35,16 @@ function BuyButton({
         return;
       }
 
-      const response = await fetch("/api/orders", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          'Accept': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          serviceId,
-          buyerId: user.id,
-          sellerId,
-          price,
-          status: "pending",
-        })
+      const response = await apiClient.post("/orders", {
+        serviceId,
+        buyerId: user.id,
+        sellerId,
+        price,
+        status: "pending",
       });
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.message || 'Failed to create order');
-      }
-
-      const order = await response.json();
       toast.success('Order created successfully!');
-      navigate(`/payment?orderId=${order.id}`);
+      navigate(`/payment?orderId=${response.id}`);
     } catch (error: any) {
       console.error('Error creating order:', error);
       toast.error(error.message || 'Failed to create order');
@@ -81,11 +68,11 @@ function BuyButton({
             {price === undefined || isNaN(price) ? (
               <span className="text-red-500">Error: Invalid price</span>
             ) : (
-              <>
+              <div>
                 You are about to purchase <span className="font-semibold">{serviceTitle}</span> for 
                 <span className="font-semibold"> ${price.toFixed(2)}</span>.
-                <p className="mt-2">Are you sure you want to continue?</p>
-              </>
+                <div className="mt-2">Are you sure you want to continue?</div>
+              </div>
             )}
           </DialogDescription>
         </DialogHeader>

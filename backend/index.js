@@ -7,9 +7,14 @@ dotenv.config();
 
 const fastify = Fastify({ logger: true });
 
-// Register CORS
+// Register CORS with specific configuration
 await fastify.register(cors, {
-  origin: '*',
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  exposedHeaders: ['Content-Range', 'X-Total-Count'],
+  maxAge: 600, // 10 minutes
 });
 
 // Health check route

@@ -13,6 +13,8 @@ import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
+import TestApiConnection from "./TestApiConnection";
+import TestAuth from "./pages/TestAuth";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import Terms from "./pages/Terms";
@@ -126,6 +128,9 @@ function AppRoutes() {
       
       {/* 404 Not Found */}
       <Route path="*" element={<NotFound />} />
+      {/* Temporary test routes - remove in production */}
+      <Route path="/test-api" element={<TestApiConnection />} />
+      <Route path="/test-auth" element={<TestAuth />} />
     </Routes>
   );
 }

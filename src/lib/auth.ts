@@ -1,114 +1,88 @@
 import { supabase } from './supabaseClient';
+import apiClient from './apiClient';
 import { API_BASE_URL } from '@/config';
 
 export async function signup(email: string, password: string) {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    console.log('Attempting signup for:', email);
     
-    // Use the new API route
-    const apiUrl = '/api/auth/signup';
-    
-    console.log('Making request to:', apiUrl);
-    
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({ 
-        email: email.trim(), 
-        password: password.trim() 
-      }),
-      credentials: 'same-origin',
-      signal: controller.signal
+    // Use Supabase directly for signup instead of backend API
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
     });
     
-    clearTimeout(timeoutId);
-    
-    console.log('Response status:', response.status);
-    
-    const responseData = await response.json().catch(() => ({}));
-    
-    if (!response.ok) {
-      const errorMessage = responseData.message || 'Registration failed';
-      console.error('Signup error:', errorMessage);
-      throw new Error(errorMessage);
+    if (error) {
+      console.error('Supabase signup error:', error);
+      throw error;
     }
     
-    // If we have a session, set it in the client
-    if (responseData.session) {
-      const { data: { session } } = await supabase.auth.setSession(responseData.session);
-      return { user: session?.user };
+    if (!data.user) {
+      throw new Error('No user data returned from signup');
     }
     
-    return { user: responseData.user };
+    console.log('Signup successful for:', email);
+    return { user: data.user };
   } catch (error) {
     console.error('Signup error:', error);
-    if (error.name === 'AbortError') {
-      throw new Error('Request timed out. Please try again.');
-    }
-    if (error.message.includes('Failed to fetch')) {
-      throw new Error('Unable to connect to the server. Please check your internet connection.');
-    }
     throw error;
   }
 }
 
 export async function login(email: string, password: string) {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    console.log('Attempting login for:', email);
+    
+    // Validate inputs
+    if (!email || !password) {
+      throw new Error('Email and password are required');
+    }
+    
+    // Trim email to remove whitespace
+    const trimmedEmail = email.trim();
     
     const { data, error } = await supabase.auth.signInWithPassword({ 
-      email: email.trim(), 
+      email: trimmedEmail, 
       password 
     });
     
-    clearTimeout(timeoutId);
-    
     if (error) {
       console.error('Supabase login error:', error);
-      // Provide more user-friendly error messages
-      if (error.message.includes('Invalid login credentials')) {
-        throw new Error('Invalid email or password. Please try again.');
-      }
-      if (error.message.includes('Email not confirmed')) {
-        throw new Error('Please verify your email before logging in.');
-      }
-      throw new Error(error.message || 'Failed to log in. Please try again.');
+      throw error;
     }
     
+    if (!data.user) {
+      throw new Error('No user data returned from authentication');
+    }
+    
+    console.log('Login successful for:', trimmedEmail);
     return data;
   } catch (error) {
     console.error('Login error:', error);
-    if (error.name === 'AbortError') {
-      throw new Error('Request timed out. Please check your connection and try again.');
-    }
     throw error;
   }
 }
 
 export async function logout() {
   try {
+    console.log('Attempting logout');
+    
     // Clear any local storage items that might be related to auth
     localStorage.removeItem('sb-auth-token');
+    localStorage.removeItem('auth_token');
     
     // Sign out from Supabase
     const { error } = await supabase.auth.signOut();
     
     // Clear any remaining session data
-    await fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'include',
-    }).catch(err => console.error('Error clearing server session:', err));
+    await apiClient.post('/auth/logout').catch(err => console.error('Error clearing server session:', err));
     
     if (error) {
       console.error('Error signing out:', error);
       throw error;
     }
     
+    console.log('Logout successful');
     // Refresh the page to ensure all state is cleared
     window.location.href = '/';
   } catch (error) {
@@ -121,24 +95,39 @@ export async function logout() {
 
 export async function getCurrentUser() {
   try {
+    console.log('Getting current user');
+    
     // First check if we have an active session
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
     
-    if (sessionError || !sessionData.session) {
-      console.error('No active session:', sessionError);
+    if (sessionError) {
+      console.error('Session error:', sessionError);
+      return null;
+    }
+    
+    if (!sessionData.session) {
+      console.log('No active session found');
       return null;
     }
 
     // Get the current user
     const { data: userData, error: userError } = await supabase.auth.getUser();
     
-    if (userError || !userData.user) {
+    if (userError) {
       console.error('Error getting current user:', userError);
       // Clear invalid session
       await supabase.auth.signOut();
       return null;
     }
+    
+    if (!userData.user) {
+      console.log('No user data found');
+      // Clear invalid session
+      await supabase.auth.signOut();
+      return null;
+    }
 
+    console.log('Current user found:', userData.user.email);
     return userData.user;
     
   } catch (error) {
@@ -155,39 +144,18 @@ export async function getCurrentUser() {
 
 export async function forgotPassword(email: string) {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-    
-    const response = await fetch('/api/auth/forgot-password', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ email }),
-      credentials: 'same-origin',
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-    
-    const responseData = await response.json().catch(() => ({}));
-    
-    if (!response.ok) {
-      const errorMessage = responseData.message || 'Failed to send password reset email';
-      console.error('Password reset error:', errorMessage);
-      throw new Error(errorMessage);
-    }
-    
-    return { success: true, message: responseData.message };
+    console.log('Attempting password reset for:', email);
+    const response = await apiClient.post('/auth/forgot-password', { email });
+    console.log('Password reset email sent');
+    return response;
   } catch (error) {
     console.error('Password reset error:', error);
-    if (error.name === 'AbortError') {
-      throw new Error('Request timed out. Please try again.');
-    }
-    if (error.message.includes('Failed to fetch')) {
-      throw new Error('Unable to connect to the server. Please check your internet connection.');
-    }
     throw error;
   }
+}
+
+// Helper function to check if user is authenticated
+export async function isAuthenticated() {
+  const user = await getCurrentUser();
+  return user !== null;
 }

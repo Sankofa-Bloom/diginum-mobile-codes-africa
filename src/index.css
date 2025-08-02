@@ -197,13 +197,37 @@
 
   /* Mobile-First Responsive Container */
   .container-mobile {
-    @apply max-w-sm mx-auto px-4 sm:max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl;
+    @apply max-w-sm mx-auto px-4 sm:max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-6xl 2xl:max-w-7xl;
   }
 
   /* PWA Specific */
   .safe-area-inset {
     padding-bottom: env(safe-area-inset-bottom);
     padding-top: env(safe-area-inset-top);
+  }
+
+  /* Header and Navigation */
+  .header-blur {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  /* Responsive Text */
+  .text-responsive-sm {
+    @apply text-sm sm:text-base;
+  }
+
+  .text-responsive-lg {
+    @apply text-lg sm:text-xl md:text-2xl;
+  }
+
+  /* Responsive Spacing */
+  .space-responsive {
+    @apply space-y-4 sm:space-y-6 md:space-y-8;
+  }
+
+  .gap-responsive {
+    @apply gap-2 sm:gap-3 md:gap-4;
   }
   
   .whatsapp-button {

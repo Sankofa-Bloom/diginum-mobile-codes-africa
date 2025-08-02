@@ -27,8 +27,8 @@ const nextConfig = {
       },
     ];
   },
-  // Enable static exports for the output: 'export' option
-  output: 'export',
+  // Remove static export configuration to enable API routes
+  // output: 'export', // Commented out to enable server-side features
   // Optional: Add a trailing slash to all paths
   trailingSlash: true,
 };

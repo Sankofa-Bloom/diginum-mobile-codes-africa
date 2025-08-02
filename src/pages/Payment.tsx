@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
 import LanguageToggle from '@/components/LanguageToggle';
-import { createPayment } from '@/lib/campay';
+import { createPayment as createCampayPayment } from '@/lib/campay';
+import axios from 'axios';
 
 const Payment = () => {
   const navigate = useNavigate();
@@ -29,8 +30,17 @@ const Payment = () => {
 
   const paymentMethods = [
     {
-      id: 'mobile',
-      name: 'Mobile Money',
+      id: 'momo',
+      name: 'MoMo',
+      icon: '📱',
+      color: 'bg-purple-600',
+      textColor: 'text-white',
+      description: 'Pay with MTN Mobile Money',
+      prefix: '+237',
+    },
+    {
+      id: 'campay',
+      name: 'Campay',
       icon: '📱',
       color: 'bg-blue-500',
       textColor: 'text-white',
@@ -39,33 +49,76 @@ const Payment = () => {
     },
   ];
 
-  const handlePayment = async () => {
-    if (!selectedPayment || !phoneNumber) {
+  const handleMoMoPayment = async () => {
+    try {
+      const response = await apiClient.post('/payments/momo/initiate', {
+        amount: orderData.totalPrice,
+        phoneNumber: phoneNumber,
+        orderId: orderData.order.id,
+        userId: orderData.order.userId
+      });
+
+      if (response.success) {
+        toast({
+          title: 'MoMo Payment Initiated',
+          description: 'Please check your phone to complete the payment',
+        });
+
+        // Poll for payment status
+        const checkStatus = async () => {
+          try {
+            const statusResponse = await apiClient.get(`/payments/status?paymentId=${response.paymentId}`);
+            
+            if (statusResponse.status === 'completed') {
+              toast({
+                title: 'Payment Successful!',
+                description: 'Your virtual number is being generated...',
+              });
+              navigate('/dashboard', {
+                state: { newOrder: orderData.order }
+              });
+            } else if (statusResponse.status === 'failed') {
+              throw new Error('Payment failed or was cancelled');
+            } else {
+              // Check again after 5 seconds
+              setTimeout(checkStatus, 5000);
+            }
+          } catch (error) {
+            console.error('Status check error:', error);
+            setIsProcessing(false);
+            toast({
+              title: 'Payment Status Error',
+              description: 'Could not verify payment status. Please check your order history.',
+              variant: 'destructive',
+            });
+          }
+        };
+
+        checkStatus();
+      }
+    } catch (error: any) {
+      console.error('MoMo payment error:', error);
+      setIsProcessing(false);
       toast({
-        title: 'Error',
-        description: 'Please select a payment method and enter your phone number.',
+        title: 'Payment Failed',
+        description: error.response?.data?.error || 'Failed to initiate MoMo payment',
         variant: 'destructive',
       });
-      return;
     }
+  };
 
-    setIsProcessing(true);
-
+  const handleCampayPayment = async () => {
     try {
-      // Format phone number for Campay
-      const formattedPhone = `+237${phoneNumber.replace(/\D/g, '')}`;
-      
-      // Create payment request
+      const formattedPhone = phoneNumber.replace(/\D/g, '');
       const paymentRequest = {
         amount: orderData.totalPrice,
-        currency: 'USD',
+        currency: 'XAF',
         phoneNumber: formattedPhone,
         reference: `DIGINUM-${orderData.order.id}`,
         description: `Payment for ${orderData.service.name} number in ${orderData.country.name}`
       };
 
-      // Initiate Campay payment
-      const paymentResult = await createPayment(paymentRequest);
+      const paymentResult = await createCampayPayment(paymentRequest);
       
       if (paymentResult.success) {
         toast({
@@ -83,37 +136,63 @@ const Payment = () => {
                 description: 'Your virtual number is being generated...',
               });
               navigate('/dashboard', {
-                state: {
-                  newOrder: orderData.order
-                }
+                state: { newOrder: orderData.order }
               });
             } else {
-              // Check again after 5 seconds
               setTimeout(checkPaymentStatus, 5000);
             }
           } catch (error) {
             console.error('Payment verification error:', error);
+            setIsProcessing(false);
             toast({
               title: 'Payment error',
               description: 'Failed to verify payment status.',
               variant: 'destructive',
             });
-            setIsProcessing(false);
           }
         };
 
-        // Start checking payment status
         checkPaymentStatus();
-      } else {
-        throw new Error('Failed to initiate payment');
       }
     } catch (error) {
+      console.error('Payment error:', error);
+      setIsProcessing(false);
       toast({
-        title: 'Payment error',
-        description: 'An error occurred. Please try again.',
+        title: 'Payment Failed',
+        description: 'Failed to process payment. Please try again.',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handlePayment = async () => {
+    if (!selectedPayment || !phoneNumber) {
+      toast({
+        title: 'Error',
+        description: 'Please select a payment method and enter your phone number.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      if (selectedPayment === 'momo') {
+        await handleMoMoPayment();
+      } else if (selectedPayment === 'campay') {
+        await handleCampayPayment();
+      } else {
+        throw new Error('Invalid payment method');
+      }
+    } catch (error) {
+      console.error('Payment error:', error);
       setIsProcessing(false);
+      toast({
+        title: 'Payment Error',
+        description: 'An error occurred while processing your payment.',
+        variant: 'destructive',
+      });
     }
   };
 

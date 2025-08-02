@@ -4,7 +4,7 @@ import { login } from '@/lib/auth';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Clean up on unmount
   useEffect(() => {
@@ -24,18 +25,42 @@ export default function LoginPage() {
     };
   }, []);
 
+  const validateForm = () => {
+    if (!email.trim()) {
+      setError('Email is required');
+      return false;
+    }
+    
+    if (!password) {
+      setError('Password is required');
+      return false;
+    }
+    
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      setError('Please enter a valid email address');
+      return false;
+    }
+    
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email || !password) {
-      setError('Please enter both email and password');
+    // Clear previous errors
+    setError(null);
+    
+    // Validate form
+    if (!validateForm()) {
       return;
     }
     
-    setError(null);
     setIsLoading(true);
     
     try {
+      console.log('Submitting login form for:', email);
       await login(email.trim(), password);
       
       if (!isMounted) return;
@@ -46,9 +71,23 @@ export default function LoginPage() {
     } catch (err: any) {
       if (!isMounted) return;
       
-      const errorMessage = err.message.includes('Invalid login credentials')
-        ? 'Invalid email or password. Please try again.'
-        : err.message || 'An error occurred during login. Please try again.';
+      console.error('Login error:', err);
+      
+      let errorMessage = 'An error occurred during login. Please try again.';
+      
+      if (err.message) {
+        if (err.message.includes('Invalid login credentials')) {
+          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+        } else if (err.message.includes('Email not confirmed')) {
+          errorMessage = 'Please check your email and confirm your account before logging in.';
+        } else if (err.message.includes('Too many requests')) {
+          errorMessage = 'Too many login attempts. Please wait a moment before trying again.';
+        } else if (err.message.includes('Network')) {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
       
       setError(errorMessage);
       toast.error(errorMessage);
@@ -58,6 +97,18 @@ export default function LoginPage() {
         setIsLoading(false);
       }
     }
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEmail(e.target.value);
+    // Clear error when user starts typing
+    if (error) setError(null);
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPassword(e.target.value);
+    // Clear error when user starts typing
+    if (error) setError(null);
   };
 
   return (
@@ -79,25 +130,43 @@ export default function LoginPage() {
                 type="email"
                 placeholder="you@email.com"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
+                onChange={handleEmailChange}
                 className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary focus:outline-none transition"
                 required
+                disabled={isLoading}
+                autoComplete="email"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1" htmlFor="password">Password</label>
-              <input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary focus:outline-none transition"
-                required
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={handlePasswordChange}
+                  className="w-full px-4 py-2 pr-10 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary focus:outline-none transition"
+                  required
+                  disabled={isLoading}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  disabled={isLoading}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </button>
+              </div>
             </div>
             {error && (
-              <div className="text-destructive text-sm mb-2 text-center p-2 bg-destructive/10 rounded-md">
+              <div className="text-destructive text-sm mb-2 text-center p-3 bg-destructive/10 rounded-md border border-destructive/20">
                 {error}
               </div>
             )}

@@ -1,9 +1,16 @@
+// DigiNum Frontend Configuration
+// Only safe, public configurations that can be exposed to the browser
+
 // API configuration
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
-  (import.meta.env.PROD ? 'https://diginum.vercel.app/api' : 'http://localhost:3000/api');
+  (import.meta.env.PROD ? 'https://diginum.vercel.app/api' : 'http://localhost:4000/api');
 
-// Campay configuration
-export const SMS_PROVIDER_BASE_URL = import.meta.env.VITE_SMS_PROVIDER_BASE_URL || 'https://sms-verification-number.com/stubs/handler_api';
+// Supabase configuration (public keys only)
+export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// SMS Provider configuration
-export const VITE_SMS_PROVIDER_API_KEY = import.meta.env.VITE_SMS_PROVIDER_API_KEY;
+// Stripe configuration (public key only)
+export const STRIPE_PUBLIC_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+
+// Note: All sensitive credentials are handled by the backend API
+// Do not expose any secret keys, service role keys, or API secrets here

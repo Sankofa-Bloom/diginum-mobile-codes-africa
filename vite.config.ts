@@ -14,7 +14,7 @@ export default defineConfig(async ({ mode }) => {
     server: {
       host: "::",
       port: 5173,
-      proxy: env.VITE_API_BASE_URL ? undefined : {
+      proxy: {
         '/api': {
           target: 'http://localhost:4000',
           changeOrigin: true,
