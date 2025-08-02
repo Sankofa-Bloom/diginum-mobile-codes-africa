@@ -418,21 +418,45 @@ export default async function routes(fastify, opts) {
 
       // Transform the data to match our format with $2 markup
       const services = [];
-      for (const [serviceCode, serviceData] of Object.entries(servicesData)) {
-        if (typeof serviceData === 'object' && serviceData.cost) {
-          const basePrice = parseFloat(serviceData.cost);
-          const finalPrice = basePrice + 2.00; // Add $2 markup to SMS provider price
-          
-          fastify.log.info(`Service ${serviceCode}: Base price $${basePrice}, Final price $${finalPrice} (with $2 markup)`);
-          
-          services.push({
-            id: serviceCode,
-            name: getServiceName(serviceCode), // Helper function to get service name
-            description: `SMS verification for ${getServiceName(serviceCode)}`,
-            price: finalPrice,
-            countryId: countryId,
-            available: serviceData.count > 0
-          });
+      
+      // Handle different response formats
+      if (Array.isArray(servicesData)) {
+        // Response is an array of service objects
+        for (const serviceData of servicesData) {
+          if (serviceData.id && serviceData.price) {
+            const basePrice = parseFloat(serviceData.price);
+            const finalPrice = basePrice + 2.00; // Add $2 markup to SMS provider price
+            
+            fastify.log.info(`Service ${serviceData.id}: Base price $${basePrice}, Final price $${finalPrice} (with $2 markup)`);
+            
+            services.push({
+              id: serviceData.id,
+              name: serviceData.name || getServiceName(serviceData.id),
+              description: `SMS verification for ${serviceData.name || getServiceName(serviceData.id)}`,
+              price: finalPrice,
+              countryId: countryId,
+              available: serviceData.quantity > 0
+            });
+          }
+        }
+      } else if (typeof servicesData === 'object') {
+        // Response is an object with service codes as keys
+        for (const [serviceCode, serviceData] of Object.entries(servicesData)) {
+          if (typeof serviceData === 'object' && serviceData.cost) {
+            const basePrice = parseFloat(serviceData.cost);
+            const finalPrice = basePrice + 2.00; // Add $2 markup to SMS provider price
+            
+            fastify.log.info(`Service ${serviceCode}: Base price $${basePrice}, Final price $${finalPrice} (with $2 markup)`);
+            
+            services.push({
+              id: serviceCode,
+              name: getServiceName(serviceCode), // Helper function to get service name
+              description: `SMS verification for ${getServiceName(serviceCode)}`,
+              price: finalPrice,
+              countryId: countryId,
+              available: serviceData.count > 0
+            });
+          }
         }
       }
 
