@@ -407,40 +407,41 @@ export default async function routes(fastify, opts) {
     
     // For now, always use fallback services since we don't have a real SMS API key
     // This ensures users can test the functionality
+    // All prices include a $2 markup on top of the base SMS provider cost
     const fallbackServices = [
-      { id: 'wa', name: 'WhatsApp', description: 'WhatsApp verification', price: 5.99, countryId: countryId, available: true },
-      { id: 'ig', name: 'Instagram', description: 'Instagram verification', price: 7.99, countryId: countryId, available: true },
-      { id: 'tg', name: 'Telegram', description: 'Telegram verification', price: 4.99, countryId: countryId, available: true },
-      { id: 'fb', name: 'Facebook', description: 'Facebook verification', price: 6.99, countryId: countryId, available: true },
-      { id: 'tw', name: 'Twitter', description: 'Twitter verification', price: 8.99, countryId: countryId, available: true },
-      { id: 'vk', name: 'VKontakte', description: 'VKontakte verification', price: 3.99, countryId: countryId, available: true },
-      { id: 'ok', name: 'Odnoklassniki', description: 'Odnoklassniki verification', price: 4.49, countryId: countryId, available: true },
-      { id: 'mb', name: 'Yahoo', description: 'Yahoo verification', price: 6.49, countryId: countryId, available: true },
-      { id: 'am', name: 'Amazon', description: 'Amazon verification', price: 8.49, countryId: countryId, available: true },
-      { id: 'nf', name: 'Netflix', description: 'Netflix verification', price: 9.99, countryId: countryId, available: true },
-      { id: 'sp', name: 'Spotify', description: 'Spotify verification', price: 5.49, countryId: countryId, available: true },
-      { id: 'ub', name: 'Uber', description: 'Uber verification', price: 7.49, countryId: countryId, available: true },
-      { id: 'ly', name: 'Lyft', description: 'Lyft verification', price: 6.99, countryId: countryId, available: true },
-      { id: 'uk', name: 'Airbnb', description: 'Airbnb verification', price: 8.99, countryId: countryId, available: true },
-      { id: 'ts', name: 'PayPal', description: 'PayPal verification', price: 9.49, countryId: countryId, available: true },
-      { id: 'it', name: 'CashApp', description: 'CashApp verification', price: 6.99, countryId: countryId, available: true },
-      { id: 'ge', name: 'Paytm', description: 'Paytm verification', price: 4.99, countryId: countryId, available: true },
-      { id: 'ka', name: 'Shopee', description: 'Shopee verification', price: 5.99, countryId: countryId, available: true },
-      { id: 'dl', name: 'Lazada', description: 'Lazada verification', price: 5.49, countryId: countryId, available: true },
-      { id: 'fl', name: 'Flipkart', description: 'Flipkart verification', price: 4.99, countryId: countryId, available: true },
-      { id: 'xd', name: 'Tokopedia', description: 'Tokopedia verification', price: 5.49, countryId: countryId, available: true },
-      { id: 'mt', name: 'Steam', description: 'Steam verification', price: 7.99, countryId: countryId, available: true },
-      { id: 'hb', name: 'Twitch', description: 'Twitch verification', price: 6.99, countryId: countryId, available: true },
-      { id: 'mm', name: 'Microsoft', description: 'Microsoft verification', price: 8.99, countryId: countryId, available: true },
-      { id: 'wx', name: 'Apple', description: 'Apple verification', price: 9.99, countryId: countryId, available: true },
-      { id: 'an', name: 'Adidas', description: 'Adidas verification', price: 4.99, countryId: countryId, available: true },
-      { id: 'ew', name: 'Nike', description: 'Nike verification', price: 5.99, countryId: countryId, available: true },
-      { id: 'bo', name: 'Wise', description: 'Wise verification', price: 7.99, countryId: countryId, available: true },
-      { id: 'nc', name: 'Payoneer', description: 'Payoneer verification', price: 8.99, countryId: countryId, available: true },
-      { id: 're', name: 'Coinbase', description: 'Coinbase verification', price: 9.99, countryId: countryId, available: true },
-      { id: 'on', name: 'Binance', description: 'Binance verification', price: 8.49, countryId: countryId, available: true },
-      { id: 'dr', name: 'ChatGPT', description: 'ChatGPT verification', price: 6.99, countryId: countryId, available: true },
-      { id: 'ai', name: 'CELEBe', description: 'CELEBe verification', price: 5.99, countryId: countryId, available: true }
+      { id: 'wa', name: 'WhatsApp', description: 'WhatsApp verification', price: 7.99, countryId: countryId, available: true },
+      { id: 'ig', name: 'Instagram', description: 'Instagram verification', price: 9.99, countryId: countryId, available: true },
+      { id: 'tg', name: 'Telegram', description: 'Telegram verification', price: 6.99, countryId: countryId, available: true },
+      { id: 'fb', name: 'Facebook', description: 'Facebook verification', price: 8.99, countryId: countryId, available: true },
+      { id: 'tw', name: 'Twitter', description: 'Twitter verification', price: 10.99, countryId: countryId, available: true },
+      { id: 'vk', name: 'VKontakte', description: 'VKontakte verification', price: 5.99, countryId: countryId, available: true },
+      { id: 'ok', name: 'Odnoklassniki', description: 'Odnoklassniki verification', price: 6.49, countryId: countryId, available: true },
+      { id: 'mb', name: 'Yahoo', description: 'Yahoo verification', price: 8.49, countryId: countryId, available: true },
+      { id: 'am', name: 'Amazon', description: 'Amazon verification', price: 10.49, countryId: countryId, available: true },
+      { id: 'nf', name: 'Netflix', description: 'Netflix verification', price: 11.99, countryId: countryId, available: true },
+      { id: 'sp', name: 'Spotify', description: 'Spotify verification', price: 7.49, countryId: countryId, available: true },
+      { id: 'ub', name: 'Uber', description: 'Uber verification', price: 9.49, countryId: countryId, available: true },
+      { id: 'ly', name: 'Lyft', description: 'Lyft verification', price: 8.99, countryId: countryId, available: true },
+      { id: 'uk', name: 'Airbnb', description: 'Airbnb verification', price: 10.99, countryId: countryId, available: true },
+      { id: 'ts', name: 'PayPal', description: 'PayPal verification', price: 11.49, countryId: countryId, available: true },
+      { id: 'it', name: 'CashApp', description: 'CashApp verification', price: 8.99, countryId: countryId, available: true },
+      { id: 'ge', name: 'Paytm', description: 'Paytm verification', price: 6.99, countryId: countryId, available: true },
+      { id: 'ka', name: 'Shopee', description: 'Shopee verification', price: 7.99, countryId: countryId, available: true },
+      { id: 'dl', name: 'Lazada', description: 'Lazada verification', price: 7.49, countryId: countryId, available: true },
+      { id: 'fl', name: 'Flipkart', description: 'Flipkart verification', price: 6.99, countryId: countryId, available: true },
+      { id: 'xd', name: 'Tokopedia', description: 'Tokopedia verification', price: 7.49, countryId: countryId, available: true },
+      { id: 'mt', name: 'Steam', description: 'Steam verification', price: 9.99, countryId: countryId, available: true },
+      { id: 'hb', name: 'Twitch', description: 'Twitch verification', price: 8.99, countryId: countryId, available: true },
+      { id: 'mm', name: 'Microsoft', description: 'Microsoft verification', price: 10.99, countryId: countryId, available: true },
+      { id: 'wx', name: 'Apple', description: 'Apple verification', price: 11.99, countryId: countryId, available: true },
+      { id: 'an', name: 'Adidas', description: 'Adidas verification', price: 6.99, countryId: countryId, available: true },
+      { id: 'ew', name: 'Nike', description: 'Nike verification', price: 7.99, countryId: countryId, available: true },
+      { id: 'bo', name: 'Wise', description: 'Wise verification', price: 9.99, countryId: countryId, available: true },
+      { id: 'nc', name: 'Payoneer', description: 'Payoneer verification', price: 10.99, countryId: countryId, available: true },
+      { id: 're', name: 'Coinbase', description: 'Coinbase verification', price: 11.99, countryId: countryId, available: true },
+      { id: 'on', name: 'Binance', description: 'Binance verification', price: 10.49, countryId: countryId, available: true },
+      { id: 'dr', name: 'ChatGPT', description: 'ChatGPT verification', price: 8.99, countryId: countryId, available: true },
+      { id: 'ai', name: 'CELEBe', description: 'CELEBe verification', price: 7.99, countryId: countryId, available: true }
     ];
     
     return reply.code(200).send(fallbackServices);
@@ -461,7 +462,7 @@ export default async function routes(fastify, opts) {
             id: serviceCode,
             name: getServiceName(serviceCode), // Helper function to get service name
             description: `SMS verification for ${getServiceName(serviceCode)}`,
-            price: parseFloat(serviceData.cost),
+            price: parseFloat(serviceData.cost) + 2.00, // Add $2 markup to all prices
             countryId: countryId,
             available: serviceData.count > 0
           });
@@ -486,16 +487,19 @@ export default async function routes(fastify, opts) {
         return reply.code(400).send({ error: 'Service ID and Country ID are required' });
       }
 
-      // Get service price from SMS provider
+      // Get service price from SMS provider and add $2 markup
       const pricesData = await callSmsApi('getServicesAndCost', {
         country: countryId,
         service: serviceId
       });
 
-      const servicePrice = pricesData[serviceId]?.cost;
-      if (!servicePrice) {
+      const baseServicePrice = pricesData[serviceId]?.cost;
+      if (!baseServicePrice) {
         return reply.code(400).send({ error: 'Service not available' });
       }
+
+      // Add $2 markup to all service prices
+      const servicePrice = parseFloat(baseServicePrice) + 2.00;
 
       // Check if user has sufficient balance
       const balanceCheck = await checkBalance(userId, servicePrice);
