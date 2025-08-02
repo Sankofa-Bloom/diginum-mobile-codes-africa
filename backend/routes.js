@@ -1267,6 +1267,7 @@ export default async function routes(fastify, opts) {
         fastify.log.error('Error fetching exchange rates:', error);
         
         // Fallback to hardcoded rates if database table doesn't exist
+        // Rates are: 1 USD = X other currency (e.g., 1 USD = 0.85 EUR)
         const fallbackRates = [
           { currency: 'USD', rate: 1.00, markup: 0, updated_at: new Date().toISOString() },
           { currency: 'EUR', rate: 0.85, markup: 10.0, updated_at: new Date().toISOString() },
@@ -1357,6 +1358,68 @@ export default async function routes(fastify, opts) {
     }
   });
 
+  // Update exchange rates from live API
+  fastify.post('/exchange-rates/update', async (request, reply) => {
+    try {
+      // Fetch live rates from a free API (using exchangerate-api.com as example)
+      const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch live exchange rates');
+      }
+
+      const data = await response.json();
+      const rates = data.rates;
+      const updatedAt = new Date().toISOString();
+
+      // Prepare rates for database update
+      const exchangeRates = [];
+      
+      // Add USD as base currency
+      exchangeRates.push({
+        currency: 'USD',
+        rate: 1.00,
+        markup: 0,
+        updated_at: updatedAt
+      });
+
+      // Add other currencies with their live rates
+      for (const [currency, rate] of Object.entries(rates)) {
+        if (currency !== 'USD') {
+          exchangeRates.push({
+            currency: currency.toUpperCase(),
+            rate: rate,
+            markup: 10.0, // Default 10% markup
+            updated_at: updatedAt
+          });
+        }
+      }
+
+      // Update database with new rates
+      const { error } = await fastify.supabase
+        .from('exchange_rates')
+        .upsert(exchangeRates, { 
+          onConflict: 'currency',
+          ignoreDuplicates: false 
+        });
+
+      if (error) {
+        fastify.log.error('Error updating exchange rates:', error);
+        return reply.code(500).send({ error: 'Failed to update exchange rates' });
+      }
+
+      return reply.code(200).send({ 
+        message: 'Exchange rates updated successfully',
+        updated_at: updatedAt,
+        currencies_updated: exchangeRates.length
+      });
+
+    } catch (error) {
+      fastify.log.error('Error updating exchange rates:', error);
+      return reply.code(500).send({ error: 'Failed to update exchange rates' });
+    }
+  });
+
   // Initiate Campay payment for add funds
   fastify.post('/add-funds/campay', { preHandler: requireAuth }, async (request, reply) => {
     try {
@@ -1386,10 +1449,14 @@ export default async function routes(fastify, opts) {
         return reply.code(400).send({ error: 'Currency not supported' });
       }
 
-      // Calculate USD amount with 10% markup
+      // Calculate USD amount with markup
+      // If user pays 100 EUR and rate is 0.85 (1 USD = 0.85 EUR)
+      // Then: 100 EUR ÷ 0.85 = 117.65 USD (base amount)
+      // With 10% markup: 117.65 × 1.10 = 129.41 USD (final amount)
       const exchangeRate = rateData.rate;
       const markup = rateData.markup || 10.0; // Default 10% markup
-      const usdAmount = amount * exchangeRate * (1 + markup / 100);
+      const baseUsdAmount = amount / exchangeRate; // Convert to USD
+      const usdAmount = baseUsdAmount * (1 + markup / 100); // Add markup
 
       // Create a unique reference for this payment
       const reference = `ADDFUNDS_${userId}_${Date.now()}`;

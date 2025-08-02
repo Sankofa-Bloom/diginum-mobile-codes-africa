@@ -49,7 +49,10 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
         if (amount && selectedRate) {
           const numAmount = parseFloat(amount);
           const markup = selectedRate.markup || 10.0;
-          const calculatedUsdAmount = numAmount * selectedRate.rate * (1 + markup / 100);
+          // Convert to USD: amount / rate (e.g., 100 EUR / 0.85 = 117.65 USD)
+          const baseUsdAmount = numAmount / selectedRate.rate;
+          // Add markup: base amount * (1 + markup/100)
+          const calculatedUsdAmount = baseUsdAmount * (1 + markup / 100);
           setUsdAmount(calculatedUsdAmount);
         } else {
           setUsdAmount(0);
@@ -204,10 +207,22 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
         <div className="space-y-4">
           {/* Currency Selection */}
           <div>
-            <Label htmlFor="currency" className="flex items-center gap-2">
-              <Globe className="h-4 w-4" />
-              Currency
-            </Label>
+            <div className="flex items-center justify-between mb-2">
+              <Label htmlFor="currency" className="flex items-center gap-2">
+                <Globe className="h-4 w-4" />
+                Currency
+              </Label>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchExchangeRates}
+                disabled={isLoading}
+                className="text-xs"
+              >
+                <Loader2 className={`h-3 w-3 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
+                Refresh Rates
+              </Button>
+            </div>
             <Select value={currency} onValueChange={setCurrency}>
               <SelectTrigger className="mt-1">
                 <SelectValue placeholder="Select currency" />
@@ -313,7 +328,7 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between">
                   <span>Exchange Rate:</span>
-                  <span>1 {currency} = ${selectedRate.rate.toFixed(6)}</span>
+                  <span>1 USD = {selectedRate.rate.toFixed(6)} {currency}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Markup ({selectedRate.markup}%):</span>
