@@ -405,8 +405,51 @@ export default async function routes(fastify, opts) {
   fastify.get('/services/:countryId', async (request, reply) => {
     const { countryId } = request.params;
     
-    // For now, always use fallback services since we don't have a real SMS API key
-    // This ensures users can test the functionality
+    // Try to get real-time prices from SMS provider first
+    try {
+      fastify.log.info(`Fetching real-time services for country: ${countryId}`);
+      
+      // Get services and costs for the country from SMS provider
+      const servicesData = await callSmsApi('getServicesAndCost', {
+        country: countryId
+      });
+
+      fastify.log.info(`SMS provider response for country ${countryId}:`, servicesData);
+
+      // Transform the data to match our format with $2 markup
+      const services = [];
+      for (const [serviceCode, serviceData] of Object.entries(servicesData)) {
+        if (typeof serviceData === 'object' && serviceData.cost) {
+          const basePrice = parseFloat(serviceData.cost);
+          const finalPrice = basePrice + 2.00; // Add $2 markup to SMS provider price
+          
+          fastify.log.info(`Service ${serviceCode}: Base price $${basePrice}, Final price $${finalPrice} (with $2 markup)`);
+          
+          services.push({
+            id: serviceCode,
+            name: getServiceName(serviceCode), // Helper function to get service name
+            description: `SMS verification for ${getServiceName(serviceCode)}`,
+            price: finalPrice,
+            countryId: countryId,
+            available: serviceData.count > 0
+          });
+        }
+      }
+
+      // If we got real services, return them
+      if (services.length > 0) {
+        fastify.log.info(`Returning ${services.length} real services from SMS provider for country ${countryId}`);
+        return reply.code(200).send(services);
+      } else {
+        fastify.log.warn(`No services returned from SMS provider for country ${countryId}, using fallback`);
+      }
+    } catch (error) {
+      fastify.log.error('Error fetching services from SMS provider:', error);
+      fastify.log.info('Using fallback services due to SMS provider error');
+    }
+
+    // Fallback to hardcoded services if SMS provider fails or returns no services
+    // These prices include a $2 markup on estimated base costs
     const fallbackServices = [
       { id: 'wa', name: 'WhatsApp', description: 'WhatsApp verification', price: 5.99, countryId: countryId, available: true },
       { id: 'ig', name: 'Instagram', description: 'Instagram verification', price: 7.99, countryId: countryId, available: true },
@@ -444,36 +487,6 @@ export default async function routes(fastify, opts) {
     ];
     
     return reply.code(200).send(fallbackServices);
-    
-    /* 
-    // TODO: Uncomment this when you have a real SMS API key
-    try {
-      // Get services and costs for the country from SMS provider
-      const servicesData = await callSmsApi('getServicesAndCost', {
-        country: countryId
-      });
-
-      // Transform the data to match our format
-      const services = [];
-      for (const [serviceCode, serviceData] of Object.entries(servicesData)) {
-        if (typeof serviceData === 'object' && serviceData.cost) {
-          services.push({
-            id: serviceCode,
-            name: getServiceName(serviceCode), // Helper function to get service name
-            description: `SMS verification for ${getServiceName(serviceCode)}`,
-            price: parseFloat(serviceData.cost),
-            countryId: countryId,
-            available: serviceData.count > 0
-          });
-        }
-      }
-
-      return reply.code(200).send(services);
-    } catch (error) {
-      fastify.log.error('Error fetching services:', error);
-      return reply.code(200).send(fallbackServices);
-    }
-    */
   });
 
   // Generate phone number using SMS provider
@@ -486,16 +499,23 @@ export default async function routes(fastify, opts) {
         return reply.code(400).send({ error: 'Service ID and Country ID are required' });
       }
 
-      // Get service price from SMS provider
+      // Get service price from SMS provider and add $2 markup
+      fastify.log.info(`Fetching price for service ${serviceId} in country ${countryId}`);
+      
       const pricesData = await callSmsApi('getServicesAndCost', {
         country: countryId,
         service: serviceId
       });
 
-      const servicePrice = pricesData[serviceId]?.cost;
-      if (!servicePrice) {
+      const baseServicePrice = pricesData[serviceId]?.cost;
+      if (!baseServicePrice) {
         return reply.code(400).send({ error: 'Service not available' });
       }
+
+      // Add $2 markup to SMS provider price
+      const servicePrice = parseFloat(baseServicePrice) + 2.00;
+      
+      fastify.log.info(`Service ${serviceId}: Base price $${baseServicePrice}, Final price $${servicePrice} (with $2 markup)`);
 
       // Check if user has sufficient balance
       const balanceCheck = await checkBalance(userId, servicePrice);
