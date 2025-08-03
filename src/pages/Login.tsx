@@ -9,7 +9,7 @@ import { Loader2, Eye, EyeOff } from 'lucide-react';
 export default function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const redirectTo = searchParams.get('redirect') || '/';
+  const redirectTo = searchParams.get('redirect') || '/dashboard';
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

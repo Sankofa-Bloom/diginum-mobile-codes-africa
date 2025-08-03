@@ -1,82 +1,227 @@
 import React, { useState } from 'react';
-import { signup } from '@/lib/auth';
+import { useNavigate } from 'react-router-dom';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Mail, CheckCircle, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+import apiClient from '@/lib/apiClient';
 
 export default function SignupPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    first_name: '',
+    last_name: '',
+    phone_number: '',
+    country: ''
+  });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setSuccess(false);
+    
     try {
-      await signup(email, password);
-      setSuccess(true);
-      // Optionally redirect or show a message
+      const response = await apiClient.post('/auth/signup', formData);
+      
+      if (response.message) {
+        setSuccess(true);
+        toast.success('Account created successfully! Please check your email to verify your account.');
+        
+        // Store email for potential resend functionality
+        localStorage.setItem('pendingVerificationEmail', formData.email);
+      }
     } catch (err: any) {
-      setError(err.message || 'Signup failed');
+      console.error('Signup error:', err);
+      const errorMessage = err.response?.data?.error || 'Signup failed. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-primary">
-      <div className="w-full max-w-md p-6">
-        <div className="bg-white/90 rounded-2xl shadow-xl p-8">
-          <div className="flex flex-col items-center mb-6">
-            <div className="mb-3">
-              <img src="/logo.svg" alt="DigiNum Logo" className="h-12 w-12 drop-shadow-lg" />
-            </div>
-            <h2 className="text-3xl font-extrabold text-primary mb-1 tracking-tight">Create Account</h2>
-            <p className="text-muted-foreground text-sm">Sign up for DigiNum and get started</p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-4">
+            <img src="/logo.svg" alt="DigiNum Logo" className="h-12 w-12 mx-auto" />
           </div>
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1" htmlFor="email">Email</label>
-              <input
-                id="email"
-                type="email"
-                placeholder="you@email.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary focus:outline-none transition"
-                required
-              />
+          <CardTitle className="text-2xl font-bold">Create Your Account</CardTitle>
+          <p className="text-gray-600 text-sm">Join DigiNum and start using virtual numbers</p>
+        </CardHeader>
+        
+        <CardContent className="space-y-4">
+          {success ? (
+            <div className="space-y-4">
+              <Alert className="border-green-200 bg-green-50">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">
+                  Account created successfully! Please check your email to verify your account.
+                </AlertDescription>
+              </Alert>
+              
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-blue-900 mb-2">Next Steps:</h3>
+                <ol className="text-blue-700 text-sm space-y-1">
+                  <li>1. Check your email inbox (and spam folder)</li>
+                  <li>2. Click the verification link in the email</li>
+                  <li>3. Complete your account setup</li>
+                </ol>
+              </div>
+              
+              <div className="space-y-2">
+                <Button 
+                  onClick={() => navigate('/login')}
+                  className="w-full"
+                >
+                  Go to Login
+                </Button>
+                <Button 
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setSuccess(false)}
+                >
+                  Create Another Account
+                </Button>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1" htmlFor="password">Password</label>
-              <input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full px-4 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary focus:outline-none transition"
-                required
-              />
-            </div>
-            {error && <div className="text-destructive text-sm mb-2 text-center">{error}</div>}
-            {success && <div className="text-success text-sm mb-2 text-center">Signup successful! Check your email to confirm your account.</div>}
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full h-11 rounded-lg font-semibold text-lg shadow-md flex items-center justify-center gap-2 disabled:opacity-60"
-            >
-              {loading ? <span className="animate-spin mr-2 h-5 w-5 border-2 border-t-transparent border-white rounded-full"></span> : null}
-              {loading ? 'Signing up...' : 'Sign Up'}
-            </button>
-            <div className="flex justify-between items-center mt-2">
-              <a href="/login" className="text-primary text-sm hover:underline">Already have an account?</a>
-            </div>
-          </form>
-        </div>
-        <div className="mt-8 text-center text-xs text-muted-foreground">&copy; {new Date().getFullYear()} DigiNum. All rights reserved.</div>
-      </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="first_name">First Name</Label>
+                  <Input
+                    id="first_name"
+                    name="first_name"
+                    type="text"
+                    value={formData.first_name}
+                    onChange={handleChange}
+                    placeholder="John"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="last_name">Last Name</Label>
+                  <Input
+                    id="last_name"
+                    name="last_name"
+                    type="text"
+                    value={formData.last_name}
+                    onChange={handleChange}
+                    placeholder="Doe"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <Label htmlFor="email">Email *</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="you@example.com"
+                  required
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="password">Password *</Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="••••••••"
+                  required
+                  minLength={8}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="phone_number">Phone Number</Label>
+                <Input
+                  id="phone_number"
+                  name="phone_number"
+                  type="tel"
+                  value={formData.phone_number}
+                  onChange={handleChange}
+                  placeholder="+1234567890"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="country">Country</Label>
+                <Input
+                  id="country"
+                  name="country"
+                  type="text"
+                  value={formData.country}
+                  onChange={handleChange}
+                  placeholder="United States"
+                />
+              </div>
+              
+              {error && (
+                <Alert className="border-red-200 bg-red-50">
+                  <AlertDescription className="text-red-800">
+                    {error}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating Account...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="h-4 w-4 mr-2" />
+                    Create Account
+                  </>
+                )}
+              </Button>
+              
+              <div className="text-center">
+                <p className="text-sm text-gray-600">
+                  Already have an account?{' '}
+                  <Button
+                    variant="link"
+                    className="p-0 h-auto text-blue-600 hover:text-blue-800"
+                    onClick={() => navigate('/login')}
+                  >
+                    Sign in here
+                  </Button>
+                </p>
+              </div>
+            </form>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

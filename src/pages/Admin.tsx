@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -13,13 +13,27 @@ import {
   Eye,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  Settings,
+  DollarSign,
+  Globe,
+  BarChart3,
+  Activity,
+  AlertCircle,
+  CheckCircle2,
+  Clock2,
+  Edit,
+  Save,
+  X,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -35,211 +49,251 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import LanguageToggle from '@/components/LanguageToggle';
-import { toast } from '@/hooks/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { toast } from 'sonner';
+import { getCurrentUser } from '@/lib/auth';
+import {
+  fetchAdminDashboardStats,
+  fetchAdminSystemSettings,
+  updateAdminSystemSettings,
+  updateExchangeRate,
+  updatePriceAdjustment,
+  fetchAdminRecentTransactions,
+  fetchAdminExchangeRates,
+  fetchAdminPriceAdjustments
+} from '@/lib/api';
+
+interface DashboardStats {
+  totalUsers: number;
+  totalOrders: number;
+  totalRevenue: number;
+  recentOrders: number;
+  activeOrders: number;
+  pendingPayments: number;
+  successRate: number;
+}
+
+interface SystemSettings {
+  smsApiKey: string;
+  smsApiKeyConfigured: boolean;
+  defaultMarkup: number;
+  campayConfigured: boolean;
+  stripeConfigured: boolean;
+  serverTime: string;
+  environment: string;
+}
+
+interface ExchangeRate {
+  id: string;
+  currency: string;
+  rate: number;
+  markup: number;
+  updated_at: string;
+}
+
+interface PriceAdjustment {
+  id: string;
+  service: string;
+  country: string;
+  markup: number;
+  updated_at: string;
+}
 
 interface Transaction {
   id: string;
+  type: 'order' | 'payment';
   userId: string;
-  userPhone: string;
-  service: string;
-  country: string;
   amount: number;
-  status: 'completed' | 'pending' | 'failed' | 'refunded';
-  paymentMethod: 'mtn' | 'orange';
-  phoneNumber?: string;
-  smsCode?: string;
+  currency: string;
+  status: string;
+  description: string;
   createdAt: string;
-  completedAt?: string;
+  phoneNumber?: string;
 }
 
 const Admin = () => {
-  const [user, setUser] = React.useState<any>(null);
   const navigate = useNavigate();
+  const [user, setUser] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('overview');
 
-  React.useEffect(() => {
-    (async () => {
+  // Dashboard Stats
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
+  const [exchangeRates, setExchangeRates] = useState<ExchangeRate[]>([]);
+  const [priceAdjustments, setPriceAdjustments] = useState<PriceAdjustment[]>([]);
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+
+  // Settings state
+  const [newSmsApiKey, setNewSmsApiKey] = useState('');
+  const [newDefaultMarkup, setNewDefaultMarkup] = useState('');
+  const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
+
+  // Exchange rate editing
+  const [editingRate, setEditingRate] = useState<string | null>(null);
+  const [editingRateValue, setEditingRateValue] = useState('');
+  const [editingMarkup, setEditingMarkup] = useState('');
+
+  // Price adjustment editing
+  const [editingPriceAdjustment, setEditingPriceAdjustment] = useState<string | null>(null);
+  const [editingPriceMarkup, setEditingPriceMarkup] = useState('');
+
+  // Check authentication
+  useEffect(() => {
+    const checkAuth = async () => {
       try {
-        const currentUser = await import('@/lib/auth').then(m => m.getCurrentUser());
+        const currentUser = await getCurrentUser();
         if (!currentUser) {
           navigate('/login', { replace: true });
-        } else {
-          setUser(currentUser);
+          return;
         }
-      } catch (e) {
+        setUser(currentUser);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Auth error:', error);
         navigate('/login', { replace: true });
       }
-    })();
+    };
+    checkAuth();
   }, [navigate]);
 
-  if (!user) return null;
-
-  const [searchTerm, setSearchTerm] = React.useState('');
-  const [statusFilter, setStatusFilter] = React.useState<string>('all');
-  const [isRefreshing, setIsRefreshing] = React.useState(false);
-
-  const [transactions, setTransactions] = React.useState<any[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
-
-  // Fetch real data from backend
-  React.useEffect(() => {
-    setIsLoading(true);
-    // Uncomment and implement this function when backend is ready
-    // fetchAdminTransactions()
-    //   .then(data => {
-    //     setTransactions(data.transactions || data);
-    //     setError(null);
-    //   })
-    //   .catch(err => {
-    //     setError(err.message);
-    //   })
-    //   .finally(() => {
-    //     setIsLoading(false);
-    //   });
+  // Load dashboard data
+  useEffect(() => {
+    if (!user) return;
     
-    // Mock data for now
-    const mockTransactions = [
-      {
-        id: 'TXN001',
-        userId: 'user1',
-        userPhone: '+237612345678',
-        service: 'Numéro virtuel USA',
-        country: 'USA',
-        amount: 2500,
-        status: 'completed',
-        paymentMethod: 'mtn',
-        phoneNumber: '+1234567890',
-        smsCode: '123456',
-        createdAt: new Date().toISOString(),
-        completedAt: new Date().toISOString()
-      },
-      {
-        id: 'TXN002',
-        userId: 'user2',
-        userPhone: '+237698765432',
-        service: 'Numéro virtuel UK',
-        country: 'UK',
-        amount: 3000,
-        status: 'pending',
-        paymentMethod: 'orange',
-        createdAt: new Date().toISOString()
+    const loadDashboardData = async () => {
+      try {
+        const [statsData, settingsData, ratesData, adjustmentsData, transactionsData] = await Promise.all([
+          fetchAdminDashboardStats(),
+          fetchAdminSystemSettings(),
+          fetchAdminExchangeRates(),
+          fetchAdminPriceAdjustments(),
+          fetchAdminRecentTransactions(20)
+        ]);
+
+        setStats(statsData);
+        setSystemSettings(settingsData);
+        setExchangeRates(ratesData);
+        setPriceAdjustments(adjustmentsData);
+        setRecentTransactions(transactionsData);
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+        toast.error('Failed to load dashboard data');
       }
-    ];
-    
-    setTransactions(mockTransactions);
-    setIsLoading(false);
-  }, []);
+    };
 
-  const stats = {
-    totalTransactions: transactions.length,
-    totalRevenue: transactions
-      .filter(t => t.status === 'completed')
-      .reduce((sum, t) => sum + t.amount, 0),
-    successRate: transactions.length > 0 ? Math.round(
-      (transactions.filter(t => t.status === 'completed').length / transactions.length) * 100
-    ) : 0,
-    activeOrders: transactions.filter(t => t.status === 'pending').length,
+    loadDashboardData();
+  }, [user]);
+
+  const handleUpdateSettings = async () => {
+    setIsUpdatingSettings(true);
+    try {
+      const updateData: any = {};
+      if (newSmsApiKey) updateData.smsApiKey = newSmsApiKey;
+      if (newDefaultMarkup) updateData.defaultMarkup = parseFloat(newDefaultMarkup);
+
+      await updateAdminSystemSettings(updateData);
+      toast.success('Settings updated successfully');
+      
+      // Reload settings
+      const settingsData = await fetchAdminSystemSettings();
+      setSystemSettings(settingsData);
+      
+      setNewSmsApiKey('');
+      setNewDefaultMarkup('');
+    } catch (error) {
+      console.error('Error updating settings:', error);
+      toast.error('Failed to update settings');
+    } finally {
+      setIsUpdatingSettings(false);
+    }
   };
 
-  const filteredTransactions = transactions.filter(transaction => {
-    const matchesSearch = transaction.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         transaction.userPhone.includes(searchTerm) ||
-                         transaction.service.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || transaction.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const handleUpdateExchangeRate = async (currency: string) => {
+    try {
+      await updateExchangeRate(currency, {
+        rate: parseFloat(editingRateValue),
+        markup: parseFloat(editingMarkup)
+      });
+      
+      toast.success(`Exchange rate for ${currency} updated successfully`);
+      setEditingRate(null);
+      setEditingRateValue('');
+      setEditingMarkup('');
+      
+      // Reload exchange rates
+      const ratesData = await fetchAdminExchangeRates();
+      setExchangeRates(ratesData);
+    } catch (error) {
+      console.error('Error updating exchange rate:', error);
+      toast.error('Failed to update exchange rate');
+    }
+  };
+
+  const handleUpdatePriceAdjustment = async (id: string) => {
+    try {
+      await updatePriceAdjustment(id, {
+        markup: parseFloat(editingPriceMarkup)
+      });
+      
+      toast.success('Price adjustment updated successfully');
+      setEditingPriceAdjustment(null);
+      setEditingPriceMarkup('');
+      
+      // Reload price adjustments
+      const adjustmentsData = await fetchAdminPriceAdjustments();
+      setPriceAdjustments(adjustmentsData);
+    } catch (error) {
+      console.error('Error updating price adjustment:', error);
+      toast.error('Failed to update price adjustment');
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
-        return <Badge className="status-active bg-success/10 text-success border-success/20">Terminé</Badge>;
+        return <Badge className="bg-green-100 text-green-800 border-green-200">Completed</Badge>;
       case 'pending':
-        return <Badge className="status-pending">En attente</Badge>;
+        return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">Pending</Badge>;
       case 'failed':
-        return <Badge className="status-expired">Échoué</Badge>;
-      case 'refunded':
-        return <Badge className="bg-blue-100 text-blue-700 border-blue-200">Remboursé</Badge>;
+        return <Badge className="bg-red-100 text-red-800 border-red-200">Failed</Badge>;
+      case 'active':
+        return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Active</Badge>;
+      case 'waiting':
+        return <Badge className="bg-orange-100 text-orange-800 border-orange-200">Waiting</Badge>;
       default:
-        return null;
+        return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
-  const getPaymentMethodBadge = (method: string) => {
-    switch (method) {
-      case 'mtn':
-        return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">MTN MoMo</Badge>;
-      case 'orange':
-        return <Badge className="bg-orange-100 text-orange-800 border-orange-200">Orange Money</Badge>;
+  const getTransactionTypeIcon = (type: string) => {
+    switch (type) {
+      case 'order':
+        return <Phone className="h-4 w-4 text-blue-600" />;
+      case 'payment':
+        return <CreditCard className="h-4 w-4 text-green-600" />;
       default:
-        return null;
+        return <Activity className="h-4 w-4 text-gray-600" />;
     }
   };
 
-  const handleRefund = (transactionId: string) => {
-    setTransactions(prev => prev.map(t => 
-      t.id === transactionId 
-        ? { ...t, status: 'refunded' as const }
-        : t
-    ));
-    toast({
-      title: 'Remboursement effectué',
-      description: `Transaction ${transactionId} remboursée avec succès.`,
-    });
-  };
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
-  const handleForceComplete = (transactionId: string) => {
-    setTransactions(prev => prev.map(t => 
-      t.id === transactionId 
-        ? { 
-            ...t, 
-            status: 'completed' as const,
-            phoneNumber: '+1987654321',
-            smsCode: '654321',
-            completedAt: new Date().toISOString()
-          }
-        : t
-    ));
-    toast({
-      title: 'Commande forcée',
-      description: `Transaction ${transactionId} marquée comme terminée.`,
-    });
-  };
-
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setTimeout(() => {
-      setIsRefreshing(false);
-      toast({
-        title: 'Données mises à jour',
-        description: 'Les dernières transactions ont été récupérées.',
-      });
-    }, 1500);
-  };
-
-  const exportData = () => {
-    const csvContent = [
-      ['ID', 'Utilisateur', 'Service', 'Pays', 'Montant', 'Status', 'Paiement', 'Date'].join(','),
-      ...filteredTransactions.map(t => [
-        t.id,
-        t.userPhone,
-        t.service,
-        t.country,
-        t.amount,
-        t.status,
-        t.paymentMethod,
-        new Date(t.createdAt).toLocaleDateString()
-      ].join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `diginum-transactions-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  };
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -255,227 +309,487 @@ const Admin = () => {
                 className="gap-2"
               >
                 <ArrowLeft className="h-4 w-4" />
-                Retour
+                Back
               </Button>
-              <h1 className="text-xl font-bold">Administration DigiNum</h1>
+              <h1 className="text-xl font-bold">DigiNum Admin Dashboard</h1>
             </div>
             <div className="flex items-center gap-2">
-              <LanguageToggle />
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleRefresh}
-                disabled={isRefreshing}
+                onClick={() => window.location.reload()}
                 className="gap-2"
               >
-                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                Actualiser
+                <RefreshCw className="h-4 w-4" />
+                Refresh
               </Button>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="container-mobile py-6 space-y-6">
-        {/* Stats Overview */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-primary">{stats.totalTransactions}</div>
-              <div className="text-sm text-muted-foreground">Transactions</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-success">₣{stats.totalRevenue.toLocaleString()}</div>
-              <div className="text-sm text-muted-foreground">Revenus</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-charcoal">{stats.successRate}%</div>
-              <div className="text-sm text-muted-foreground">Taux succès</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-warning">{stats.activeOrders}</div>
-              <div className="text-sm text-muted-foreground">En attente</div>
-            </CardContent>
-          </Card>
-        </div>
+      <div className="container-mobile py-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="overview" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="transactions" className="flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              Transactions
+            </TabsTrigger>
+            <TabsTrigger value="exchange-rates" className="flex items-center gap-2">
+              <Globe className="h-4 w-4" />
+              Exchange Rates
+            </TabsTrigger>
+            <TabsTrigger value="pricing" className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4" />
+              Pricing
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Settings
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Filters and Search */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-5 w-5 text-primary" />
-              Filtres et Recherche
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  placeholder="Rechercher par ID, téléphone, service..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-48">
-                  <SelectValue placeholder="Filtrer par statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les statuts</SelectItem>
-                  <SelectItem value="completed">Terminé</SelectItem>
-                  <SelectItem value="pending">En attente</SelectItem>
-                  <SelectItem value="failed">Échoué</SelectItem>
-                  <SelectItem value="refunded">Remboursé</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                onClick={exportData}
-                className="gap-2"
-              >
-                <Download className="h-4 w-4" />
-                Exporter
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Transactions Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-primary" />
-              Transactions ({filteredTransactions.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Utilisateur</TableHead>
-                    <TableHead>Service</TableHead>
-                    <TableHead>Pays</TableHead>
-                    <TableHead>Montant</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead>Paiement</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTransactions.map((transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell className="font-mono text-sm">{transaction.id}</TableCell>
-                      <TableCell>{transaction.userPhone}</TableCell>
-                      <TableCell>{transaction.service}</TableCell>
-                      <TableCell>{transaction.country}</TableCell>
-                      <TableCell className="font-semibold">₣{transaction.amount.toLocaleString()}</TableCell>
-                      <TableCell>{getStatusBadge(transaction.status)}</TableCell>
-                      <TableCell>{getPaymentMethodBadge(transaction.paymentMethod)}</TableCell>
-                      <TableCell className="text-sm">
-                        {new Date(transaction.createdAt).toLocaleDateString('fr-FR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          {transaction.status === 'pending' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-success"
-                              onClick={() => handleForceComplete(transaction.id)}
-                            >
-                              <CheckCircle className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {(transaction.status === 'completed' || transaction.status === 'pending') && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-destructive"
-                              onClick={() => handleRefund(transaction.id)}
-                            >
-                              <XCircle className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            {filteredTransactions.length === 0 && (
-              <div className="text-center py-8">
-                <div className="text-4xl mb-4">🔍</div>
-                <h3 className="text-lg font-semibold mb-2">Aucune transaction trouvée</h3>
-                <p className="text-muted-foreground">
-                  Aucune transaction ne correspond à vos critères de recherche.
-                </p>
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="space-y-6">
+            {/* Stats Cards */}
+            {stats && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold text-primary">{stats.totalUsers}</div>
+                    <div className="text-sm text-muted-foreground">Total Users</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold text-success">${stats.totalRevenue.toLocaleString()}</div>
+                    <div className="text-sm text-muted-foreground">Total Revenue</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold text-blue-600">{stats.totalOrders}</div>
+                    <div className="text-sm text-muted-foreground">Total Orders</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <div className="text-2xl font-bold text-orange-600">{stats.successRate}%</div>
+                    <div className="text-sm text-muted-foreground">Success Rate</div>
+                  </CardContent>
+                </Card>
               </div>
             )}
-          </CardContent>
-        </Card>
 
-        {/* Quick Actions */}
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card className="bg-blue-50 border-blue-200">
-            <CardContent className="p-6">
-              <div className="flex items-start gap-4">
-                <div className="text-3xl">📊</div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-lg mb-2 text-blue-900">Rapports détaillés</h3>
-                  <p className="text-blue-800 text-sm mb-4">
-                    Générez des rapports complets sur les ventes, les utilisateurs et les performances.
-                  </p>
-                  <Button variant="outline" size="sm" className="border-blue-300 text-blue-700">
-                    Générer rapport
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            {/* System Status */}
+            {systemSettings && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="h-5 w-5" />
+                    System Status
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="flex items-center gap-2">
+                                             {systemSettings.smsApiKeyConfigured ? (
+                         <CheckCircle2 className="h-4 w-4 text-green-600" />
+                       ) : (
+                         <XCircle className="h-4 w-4 text-red-600" />
+                       )}
+                      <span className="text-sm">SMS API</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                                             {systemSettings.campayConfigured ? (
+                         <CheckCircle2 className="h-4 w-4 text-green-600" />
+                       ) : (
+                         <XCircle className="h-4 w-4 text-red-600" />
+                       )}
+                      <span className="text-sm">Campay</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                                             {systemSettings.stripeConfigured ? (
+                         <CheckCircle2 className="h-4 w-4 text-green-600" />
+                       ) : (
+                         <XCircle className="h-4 w-4 text-red-600" />
+                       )}
+                      <span className="text-sm">Stripe</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock2 className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm">{systemSettings.environment}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-          <Card className="bg-green-50 border-green-200">
-            <CardContent className="p-6">
-              <div className="flex items-start gap-4">
-                <div className="text-3xl">⚙️</div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-lg mb-2 text-green-900">Configuration système</h3>
-                  <p className="text-green-800 text-sm mb-4">
-                    Gérez les prix, les fournisseurs d'API et les paramètres de paiement.
-                  </p>
-                  <Button variant="outline" size="sm" className="border-green-300 text-green-700">
-                    Configurer
-                  </Button>
+            {/* Recent Activity */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5" />
+                  Recent Activity
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {recentTransactions.slice(0, 10).map((transaction) => (
+                    <div key={transaction.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        {getTransactionTypeIcon(transaction.type)}
+                        <div>
+                          <div className="font-medium">{transaction.description}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {new Date(transaction.createdAt).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">${transaction.amount}</span>
+                        {getStatusBadge(transaction.status)}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Transactions Tab */}
+          <TabsContent value="transactions" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5" />
+                  Recent Transactions
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentTransactions.map((transaction) => (
+                      <TableRow key={transaction.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {getTransactionTypeIcon(transaction.type)}
+                            <span className="capitalize">{transaction.type}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>{transaction.description}</TableCell>
+                        <TableCell className="font-medium">${transaction.amount}</TableCell>
+                        <TableCell>{getStatusBadge(transaction.status)}</TableCell>
+                        <TableCell className="text-sm">
+                          {new Date(transaction.createdAt).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Exchange Rates Tab */}
+          <TabsContent value="exchange-rates" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Globe className="h-5 w-5" />
+                  Exchange Rates Management
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Currency</TableHead>
+                      <TableHead>Rate (1 USD = X)</TableHead>
+                      <TableHead>Markup (%)</TableHead>
+                      <TableHead>Last Updated</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {exchangeRates.map((rate) => (
+                      <TableRow key={rate.id}>
+                        <TableCell className="font-medium">{rate.currency}</TableCell>
+                        <TableCell>
+                          {editingRate === rate.currency ? (
+                            <Input
+                              type="number"
+                              step="0.000001"
+                              value={editingRateValue}
+                              onChange={(e) => setEditingRateValue(e.target.value)}
+                              className="w-24"
+                            />
+                          ) : (
+                            rate.rate.toFixed(6)
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {editingRate === rate.currency ? (
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={editingMarkup}
+                              onChange={(e) => setEditingMarkup(e.target.value)}
+                              className="w-20"
+                            />
+                          ) : (
+                            `${rate.markup}%`
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {new Date(rate.updated_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          {editingRate === rate.currency ? (
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => handleUpdateExchangeRate(rate.currency)}
+                              >
+                                <Save className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setEditingRate(null);
+                                  setEditingRateValue('');
+                                  setEditingMarkup('');
+                                }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditingRate(rate.currency);
+                                setEditingRateValue(rate.rate.toString());
+                                setEditingMarkup(rate.markup.toString());
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Pricing Tab */}
+          <TabsContent value="pricing" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5" />
+                  Price Adjustments
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Service</TableHead>
+                      <TableHead>Country</TableHead>
+                      <TableHead>Markup (%)</TableHead>
+                      <TableHead>Last Updated</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {priceAdjustments.map((adjustment) => (
+                      <TableRow key={adjustment.id}>
+                        <TableCell className="font-medium capitalize">{adjustment.service}</TableCell>
+                        <TableCell>{adjustment.country}</TableCell>
+                        <TableCell>
+                          {editingPriceAdjustment === adjustment.id ? (
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={editingPriceMarkup}
+                              onChange={(e) => setEditingPriceMarkup(e.target.value)}
+                              className="w-20"
+                            />
+                          ) : (
+                            `${adjustment.markup}%`
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {new Date(adjustment.updated_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          {editingPriceAdjustment === adjustment.id ? (
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => handleUpdatePriceAdjustment(adjustment.id)}
+                              >
+                                <Save className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setEditingPriceAdjustment(null);
+                                  setEditingPriceMarkup('');
+                                }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditingPriceAdjustment(adjustment.id);
+                                setEditingPriceMarkup(adjustment.markup.toString());
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Settings Tab */}
+          <TabsContent value="settings" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  System Configuration
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* SMS API Key */}
+                <div className="space-y-2">
+                  <Label htmlFor="smsApiKey">SMS API Key</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="smsApiKey"
+                      type="password"
+                      placeholder="Enter new SMS API key"
+                      value={newSmsApiKey}
+                      onChange={(e) => setNewSmsApiKey(e.target.value)}
+                    />
+                    <Button
+                      onClick={handleUpdateSettings}
+                      disabled={isUpdatingSettings || !newSmsApiKey}
+                    >
+                      {isUpdatingSettings ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  {systemSettings && (
+                    <p className="text-sm text-muted-foreground">
+                      Current: {systemSettings.smsApiKey} 
+                      {systemSettings.smsApiKeyConfigured ? (
+                        <span className="text-green-600 ml-2">✓ Configured</span>
+                      ) : (
+                        <span className="text-red-600 ml-2">✗ Not configured</span>
+                      )}
+                    </p>
+                  )}
+                </div>
+
+                {/* Default Markup */}
+                <div className="space-y-2">
+                  <Label htmlFor="defaultMarkup">Default Markup (%)</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="defaultMarkup"
+                      type="number"
+                      step="0.01"
+                      placeholder="Enter default markup percentage"
+                      value={newDefaultMarkup}
+                      onChange={(e) => setNewDefaultMarkup(e.target.value)}
+                    />
+                    <Button
+                      onClick={handleUpdateSettings}
+                      disabled={isUpdatingSettings || !newDefaultMarkup}
+                    >
+                      {isUpdatingSettings ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  {systemSettings && (
+                    <p className="text-sm text-muted-foreground">
+                      Current: {systemSettings.defaultMarkup}%
+                    </p>
+                  )}
+                </div>
+
+                {/* System Info */}
+                {systemSettings && (
+                  <div className="space-y-2">
+                    <Label>System Information</Label>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="font-medium">Environment:</span> {systemSettings.environment}
+                      </div>
+                      <div>
+                        <span className="font-medium">Server Time:</span> {new Date(systemSettings.serverTime).toLocaleString()}
+                      </div>
+                      <div>
+                        <span className="font-medium">Campay:</span> 
+                        {systemSettings.campayConfigured ? (
+                          <span className="text-green-600 ml-2">✓ Configured</span>
+                        ) : (
+                          <span className="text-red-600 ml-2">✗ Not configured</span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="font-medium">Stripe:</span> 
+                        {systemSettings.stripeConfigured ? (
+                          <span className="text-green-600 ml-2">✓ Configured</span>
+                        ) : (
+                          <span className="text-red-600 ml-2">✗ Not configured</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

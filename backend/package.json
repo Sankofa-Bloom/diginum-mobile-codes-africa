@@ -18,7 +18,8 @@
     "fastify-cors": "^6.1.0",
     "fastify-env": "^2.2.0",
     "fastify-jwt": "^4.2.0",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^7.0.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

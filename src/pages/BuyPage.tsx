@@ -108,11 +108,12 @@ const BuyPage = () => {
         if (!user) {
           toast.error('Please log in to purchase a service.');
           navigate('/login', { state: { from: '/buy' } });
-        } else {
-          // Load countries and balance immediately after authentication
-          loadCountries();
-          loadAccountBalance();
+          return; // Exit early if not authenticated
         }
+        
+        // Only load data if user is authenticated
+        loadCountries();
+        loadAccountBalance();
       } catch (error) {
         console.error('Error checking authentication:', error);
         toast.error('An error occurred while checking your authentication status.');

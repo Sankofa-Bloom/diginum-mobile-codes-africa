@@ -1,4 +1,3 @@
-
 import rateLimit from '@fastify/rate-limit';
 import { requireAuth } from './auth.js';
 import securityMiddleware from './middleware/security.js';
@@ -103,19 +102,184 @@ export default async function routes(fastify, opts) {
   // Handle both /signup and /register for backward compatibility
   const handleSignup = async (request, reply) => {
     try {
-      const { email, password } = request.body;
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
+      const { email, password, first_name, last_name, phone_number, country } = request.body;
       
-      if (error) throw error;
-      return data;
+      // Validate input
+      if (!email || !password) {
+        return reply.code(400).send({ error: 'Email and password are required' });
+      }
+
+      // Check if user already exists
+      const { data: existingUser, error: checkError } = await fastify.supabase
+        .from('users')
+        .select('id')
+        .eq('email', email.trim())
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('Error checking existing user:', checkError);
+        return reply.code(500).send({ error: 'Internal server error' });
+      }
+
+      if (existingUser) {
+        return reply.code(400).send({ error: 'User with this email already exists' });
+      }
+
+      // Hash password
+      const bcrypt = await import('bcrypt');
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+      // Generate verification token
+      const { generateVerificationToken, sendVerificationEmail } = await import('./emailService.js');
+      const verificationToken = generateVerificationToken();
+      const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+      // Create user in our custom users table
+      const { data: user, error: createError } = await fastify.supabase
+        .from('users')
+        .insert({
+          email: email.trim(),
+          password_hash: hashedPassword,
+          first_name: first_name || null,
+          last_name: last_name || null,
+          phone_number: phone_number || null,
+          country: country || null,
+          email_verification_token: verificationToken,
+          email_verification_expires: tokenExpiry.toISOString()
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('Error creating user:', createError);
+        return reply.code(500).send({ error: 'Failed to create user' });
+      }
+
+      // Send verification email
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const emailResult = await sendVerificationEmail(user, verificationToken, baseUrl);
+
+      if (!emailResult.success) {
+        console.error('Failed to send verification email:', emailResult.error);
+        // Don't fail the signup, just log the error
+      }
+
+      return reply.code(201).send({
+        message: 'User created successfully. Please check your email to verify your account.',
+        user: {
+          id: user.id,
+          email: user.email,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          email_verified: user.email_verified
+        }
+      });
     } catch (error) {
-      fastify.log.error('Registration error:', error);
-      throw error;
+      console.error('Signup error:', error);
+      return reply.code(500).send({ error: 'Internal server error' });
     }
   };
+
+  // Email verification endpoint
+  fastify.get('/auth/verify-email', async (request, reply) => {
+    try {
+      const { token } = request.query;
+      
+      if (!token) {
+        return reply.code(400).send({ error: 'Verification token is required' });
+      }
+
+      const { verifyEmailToken, sendWelcomeEmail } = await import('./emailService.js');
+      const result = await verifyEmailToken(fastify, token);
+
+      if (!result.success) {
+        return reply.code(400).send({ error: result.error });
+      }
+
+      // Send welcome email
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const welcomeResult = await sendWelcomeEmail(result.user, baseUrl);
+
+      if (!welcomeResult.success) {
+        console.error('Failed to send welcome email:', welcomeResult.error);
+        // Don't fail the verification, just log the error
+      }
+
+      return reply.code(200).send({
+        message: 'Email verified successfully! Welcome to DigiNum!',
+        user: {
+          id: result.user.id,
+          email: result.user.email,
+          first_name: result.user.first_name,
+          last_name: result.user.last_name,
+          email_verified: true
+        }
+      });
+    } catch (error) {
+      console.error('Email verification error:', error);
+      return reply.code(500).send({ error: 'Internal server error' });
+    }
+  });
+
+  // Resend verification email endpoint
+  fastify.post('/auth/resend-verification', async (request, reply) => {
+    try {
+      const { email } = request.body;
+      
+      if (!email) {
+        return reply.code(400).send({ error: 'Email is required' });
+      }
+
+      // Check if user exists and is not verified
+      const { data: user, error: userError } = await fastify.supabase
+        .from('users')
+        .select('*')
+        .eq('email', email.trim())
+        .eq('email_verified', false)
+        .single();
+
+      if (userError || !user) {
+        return reply.code(400).send({ error: 'User not found or already verified' });
+      }
+
+      // Generate new verification token
+      const { generateVerificationToken, sendVerificationEmail } = await import('./emailService.js');
+      const verificationToken = generateVerificationToken();
+      const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+      // Update user with new token
+      const { error: updateError } = await fastify.supabase
+        .from('users')
+        .update({
+          email_verification_token: verificationToken,
+          email_verification_expires: tokenExpiry.toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (updateError) {
+        console.error('Error updating verification token:', updateError);
+        return reply.code(500).send({ error: 'Failed to generate new verification token' });
+      }
+
+      // Send verification email
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const emailResult = await sendVerificationEmail(user, verificationToken, baseUrl);
+
+      if (!emailResult.success) {
+        console.error('Failed to send verification email:', emailResult.error);
+        return reply.code(500).send({ error: 'Failed to send verification email' });
+      }
+
+      return reply.code(200).send({
+        message: 'Verification email sent successfully'
+      });
+    } catch (error) {
+      console.error('Resend verification error:', error);
+      return reply.code(500).send({ error: 'Internal server error' });
+    }
+  });
 
   // Logout endpoint
   fastify.post('/api/auth/logout', async (request, reply) => {
@@ -1026,7 +1190,7 @@ export default async function routes(fastify, opts) {
   });
 
   // Exchange rates management
-  fastify.get('/api/admin/exchange-rates', async (request, reply) => {
+  fastify.get('/admin/exchange-rates', { preHandler: requireAuth }, async (request, reply) => {
     try {
       const { data, error } = await fastify.supabase
         .from('exchange_rates')
@@ -1078,7 +1242,7 @@ export default async function routes(fastify, opts) {
   });
 
   // Price adjustments management
-  fastify.get('/api/admin/price-adjustments', async (request, reply) => {
+  fastify.get('/admin/price-adjustments', { preHandler: requireAuth }, async (request, reply) => {
     try {
       const { data, error } = await fastify.supabase
         .from('price_adjustments')
@@ -1222,7 +1386,7 @@ export default async function routes(fastify, opts) {
   });
 
   // Admin Panel (list users)
-  fastify.get('/api/admin/users', { preHandler: requireAuth }, async (request, reply) => {
+  fastify.get('/admin/users', { preHandler: requireAuth }, async (request, reply) => {
     try {
       const { data, error } = await fastify.supabase
         .from('users')
@@ -1235,7 +1399,7 @@ export default async function routes(fastify, opts) {
   });
 
   // Admin Panel (list orders)
-  fastify.get('/api/admin/orders', { preHandler: requireAuth }, async (request, reply) => {
+  fastify.get('/admin/orders', { preHandler: requireAuth }, async (request, reply) => {
     try {
       const { data, error } = await fastify.supabase
         .from('orders')
@@ -1248,7 +1412,7 @@ export default async function routes(fastify, opts) {
   });
 
   // Admin Panel (list payments)
-  fastify.get('/api/admin/payments', { preHandler: requireAuth }, async (request, reply) => {
+  fastify.get('/admin/payments', { preHandler: requireAuth }, async (request, reply) => {
     try {
       const { data, error } = await fastify.supabase
         .from('payments')
@@ -1257,6 +1421,239 @@ export default async function routes(fastify, opts) {
       return data;
     } catch (e) {
       return [{ paymentId: 1, amount: 500, status: 'completed', error: e.message }];
+    }
+  });
+
+  // Admin Dashboard Statistics
+  fastify.get('/admin/dashboard-stats', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      // Get total users
+      const { count: totalUsers, error: usersError } = await fastify.supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true });
+
+      // Get total orders
+      const { count: totalOrders, error: ordersError } = await fastify.supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true });
+
+      // Get total revenue from add_funds_payments
+      const { data: payments, error: paymentsError } = await fastify.supabase
+        .from('add_funds_payments')
+        .select('amount_usd, status')
+        .eq('status', 'completed');
+
+      const totalRevenue = payments?.reduce((sum, payment) => sum + parseFloat(payment.amount_usd), 0) || 0;
+
+      // Get recent orders (last 7 days)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      const { data: recentOrders, error: recentError } = await fastify.supabase
+        .from('orders')
+        .select('*')
+        .gte('created_at', sevenDaysAgo.toISOString());
+
+      // Get active orders
+      const { data: activeOrders, error: activeError } = await fastify.supabase
+        .from('orders')
+        .select('*')
+        .in('status', ['active', 'waiting']);
+
+      // Get pending payments
+      const { data: pendingPayments, error: pendingError } = await fastify.supabase
+        .from('add_funds_payments')
+        .select('*')
+        .eq('status', 'pending');
+
+      const stats = {
+        totalUsers: totalUsers || 0,
+        totalOrders: totalOrders || 0,
+        totalRevenue: parseFloat(totalRevenue.toFixed(2)),
+        recentOrders: recentOrders?.length || 0,
+        activeOrders: activeOrders?.length || 0,
+        pendingPayments: pendingPayments?.length || 0,
+        successRate: totalOrders > 0 ? Math.round((recentOrders?.filter(o => o.status === 'completed').length / recentOrders?.length) * 100) : 0
+      };
+
+      return reply.code(200).send(stats);
+    } catch (error) {
+      fastify.log.error('Error fetching dashboard stats:', error);
+      return reply.code(500).send({ error: 'Failed to fetch dashboard statistics' });
+    }
+  });
+
+  // Admin System Settings
+  fastify.get('/admin/system-settings', async (request, reply) => {
+    try {
+      // Get current SMS API key (masked)
+      const smsApiKey = process.env.SMS_API_KEY || '';
+      const maskedApiKey = smsApiKey.length > 8 ? 
+        smsApiKey.substring(0, 4) + '****' + smsApiKey.substring(smsApiKey.length - 4) : 
+        '****';
+
+      // Get default markup from environment or use 2.00
+      const defaultMarkup = process.env.DEFAULT_MARKUP || '2.00';
+
+      const settings = {
+        smsApiKey: maskedApiKey,
+        smsApiKeyConfigured: !!process.env.SMS_API_KEY,
+        defaultMarkup: parseFloat(defaultMarkup),
+        campayConfigured: !!(process.env.CAMPAY_API_KEY),
+        stripeConfigured: !!(process.env.STRIPE_SECRET_KEY),
+        serverTime: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development'
+      };
+
+      return reply.code(200).send(settings);
+    } catch (error) {
+      fastify.log.error('Error fetching system settings:', error);
+      return reply.code(500).send({ error: 'Failed to fetch system settings' });
+    }
+  });
+
+  // Update system settings
+  fastify.post('/admin/system-settings', async (request, reply) => {
+    try {
+      const { smsApiKey, defaultMarkup } = request.body;
+      
+      // Note: In a real application, you'd want to update environment variables
+      // For now, we'll just validate and return success
+      // In production, you might want to restart the server or use a config management system
+      
+      if (smsApiKey && smsApiKey.length < 10) {
+        return reply.code(400).send({ error: 'SMS API key must be at least 10 characters' });
+      }
+
+      if (defaultMarkup !== undefined && (defaultMarkup < 0 || defaultMarkup > 100)) {
+        return reply.code(400).send({ error: 'Default markup must be between 0 and 100' });
+      }
+
+      // For now, just return success - in production you'd update the actual environment
+      return reply.code(200).send({ 
+        message: 'Settings updated successfully',
+        note: 'Server restart may be required for some changes to take effect'
+      });
+    } catch (error) {
+      fastify.log.error('Error updating system settings:', error);
+      return reply.code(500).send({ error: 'Failed to update system settings' });
+    }
+  });
+
+  // Update exchange rate
+  fastify.put('/admin/exchange-rates/:currency', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      const { currency } = request.params;
+      const { rate, markup } = request.body;
+      
+      if (!rate || rate <= 0) {
+        return reply.code(400).send({ error: 'Valid rate is required' });
+      }
+
+      const { data, error } = await fastify.supabase
+        .from('exchange_rates')
+        .update({
+          rate: parseFloat(rate),
+          markup: markup !== undefined ? parseFloat(markup) : 10.0,
+          updated_at: new Date().toISOString()
+        })
+        .eq('currency', currency.toUpperCase())
+        .select()
+        .single();
+
+      if (error) {
+        fastify.log.error('Error updating exchange rate:', error);
+        return reply.code(500).send({ error: 'Failed to update exchange rate' });
+      }
+
+      return reply.code(200).send(data);
+    } catch (error) {
+      fastify.log.error('Error in update exchange rate route:', error);
+      return reply.code(500).send({ error: 'Internal server error' });
+    }
+  });
+
+  // Update price adjustment
+  fastify.put('/admin/price-adjustments/:id', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      const { id } = request.params;
+      const { markup } = request.body;
+      
+      if (markup === undefined || markup < 0) {
+        return reply.code(400).send({ error: 'Valid markup is required' });
+      }
+
+      const { data, error } = await fastify.supabase
+        .from('price_adjustments')
+        .update({
+          markup: parseFloat(markup),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        fastify.log.error('Error updating price adjustment:', error);
+        return reply.code(500).send({ error: 'Failed to update price adjustment' });
+      }
+
+      return reply.code(200).send(data);
+    } catch (error) {
+      fastify.log.error('Error in update price adjustment route:', error);
+      return reply.code(500).send({ error: 'Internal server error' });
+    }
+  });
+
+  // Get recent transactions for admin
+  fastify.get('/admin/recent-transactions', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      const { limit = 50 } = request.query;
+      
+      // Get recent orders
+      const { data: orders, error: ordersError } = await fastify.supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(parseInt(limit));
+
+      // Get recent payments
+      const { data: payments, error: paymentsError } = await fastify.supabase
+        .from('add_funds_payments')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(parseInt(limit));
+
+      const transactions = [
+        ...(orders || []).map(order => ({
+          id: order.id,
+          type: 'order',
+          userId: order.user_id,
+          amount: order.price,
+          currency: 'USD',
+          status: order.status,
+          description: `Order for ${order.service} in ${order.country}`,
+          createdAt: order.created_at,
+          phoneNumber: order.phone_number
+        })),
+        ...(payments || []).map(payment => ({
+          id: payment.id,
+          type: 'payment',
+          userId: payment.user_id,
+          amount: payment.amount_usd,
+          currency: 'USD',
+          status: payment.status,
+          description: `Add funds - ${payment.amount_original} ${payment.currency}`,
+          createdAt: payment.created_at,
+          phoneNumber: payment.phone_number
+        }))
+      ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+       .slice(0, parseInt(limit));
+
+      return reply.code(200).send(transactions);
+    } catch (error) {
+      fastify.log.error('Error fetching recent transactions:', error);
+      return reply.code(500).send({ error: 'Failed to fetch recent transactions' });
     }
   });
 

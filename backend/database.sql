@@ -1,8 +1,34 @@
+-- Drop and recreate tables to fix precision issues
+DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS exchange_rates CASCADE;
+
+-- Create users table
+CREATE TABLE IF NOT EXISTS users (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  supabase_user_id UUID UNIQUE,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password_hash VARCHAR(255),
+  first_name VARCHAR(100),
+  last_name VARCHAR(100),
+  phone_number VARCHAR(20),
+  country VARCHAR(100),
+  balance DECIMAL(10, 2) DEFAULT 0.00,
+  email_verified BOOLEAN DEFAULT FALSE,
+  email_verification_token VARCHAR(255),
+  email_verification_expires TIMESTAMP WITH TIME ZONE,
+  reset_password_token VARCHAR(255),
+  reset_password_expires TIMESTAMP WITH TIME ZONE,
+  status VARCHAR(20) DEFAULT 'active',
+  last_login TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create exchange_rates table
 CREATE TABLE IF NOT EXISTS exchange_rates (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  currency VARCHAR(3) NOT NULL,
-  rate DECIMAL(10, 6) NOT NULL,
+  currency VARCHAR(3) NOT NULL UNIQUE,
+  rate DECIMAL(15, 6) NOT NULL,
   markup DECIMAL(5, 2) NOT NULL DEFAULT 0,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -19,6 +45,9 @@ CREATE TABLE IF NOT EXISTS price_adjustments (
   CONSTRAINT unique_service_country UNIQUE (service, country)
 );
 
+-- Drop and recreate add_funds_payments table to fix precision issues
+DROP TABLE IF EXISTS add_funds_payments CASCADE;
+
 -- Create add_funds_payments table
 CREATE TABLE IF NOT EXISTS add_funds_payments (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -30,13 +59,18 @@ CREATE TABLE IF NOT EXISTS add_funds_payments (
   reference VARCHAR(100) UNIQUE NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'pending',
   campay_transaction_id VARCHAR(100),
-  exchange_rate DECIMAL(10, 6) NOT NULL,
+  exchange_rate DECIMAL(15, 6) NOT NULL,
   markup DECIMAL(5, 2) NOT NULL DEFAULT 2.0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create indexes
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_supabase_user_id ON users(supabase_user_id);
+CREATE INDEX IF NOT EXISTS idx_users_email_verification_token ON users(email_verification_token);
+CREATE INDEX IF NOT EXISTS idx_users_reset_password_token ON users(reset_password_token);
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 CREATE INDEX IF NOT EXISTS idx_exchange_rates_currency ON exchange_rates(currency);
 CREATE INDEX IF NOT EXISTS idx_price_adjustments_service_country ON price_adjustments(service, country);
 CREATE INDEX IF NOT EXISTS idx_add_funds_payments_user_id ON add_funds_payments(user_id);

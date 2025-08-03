@@ -135,3 +135,52 @@ export async function checkSMS(orderId: string) {
     throw new Error('Failed to check SMS');
   }
 }
+
+// Admin API functions
+export const fetchAdminDashboardStats = async () => {
+  const response = await apiClient.get('/admin/dashboard-stats');
+  return response;
+};
+
+export const fetchAdminSystemSettings = async () => {
+  const response = await apiClient.get('/admin/system-settings');
+  return response;
+};
+
+export const updateAdminSystemSettings = async (settings: {
+  smsApiKey?: string;
+  defaultMarkup?: number;
+}) => {
+  const response = await apiClient.post('/admin/system-settings', settings);
+  return response;
+};
+
+export const updateExchangeRate = async (currency: string, data: {
+  rate: number;
+  markup?: number;
+}) => {
+  const response = await apiClient.put(`/admin/exchange-rates/${currency}`, data);
+  return response;
+};
+
+export const updatePriceAdjustment = async (id: string, data: {
+  markup: number;
+}) => {
+  const response = await apiClient.put(`/admin/price-adjustments/${id}`, data);
+  return response;
+};
+
+export const fetchAdminRecentTransactions = async (limit: number = 50) => {
+  const response = await apiClient.get(`/admin/recent-transactions?limit=${limit}`);
+  return response;
+};
+
+export const fetchAdminExchangeRates = async () => {
+  const response = await apiClient.get('/admin/exchange-rates');
+  return response;
+};
+
+export const fetchAdminPriceAdjustments = async () => {
+  const response = await apiClient.get('/admin/price-adjustments');
+  return response;
+};
