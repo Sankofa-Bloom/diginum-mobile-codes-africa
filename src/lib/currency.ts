@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabaseClient';
+import apiClient from '@/lib/apiClient';
 
 export interface ExchangeRate {
   currency: string;
@@ -66,11 +67,8 @@ export class CurrencyService {
   static async getExchangeRates(): Promise<ExchangeRate[]> {
     try {
       // Try to get from backend first
-      const response = await fetch('/api/exchange-rates');
-      if (response.ok) {
-        const rates = await response.json();
-        return rates;
-      }
+      const rates = await apiClient.get('/exchange-rates');
+      return rates.rates || rates;
     } catch (error) {
       console.error('Error fetching from backend:', error);
     }

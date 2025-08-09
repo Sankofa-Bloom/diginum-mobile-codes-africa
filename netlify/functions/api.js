@@ -270,6 +270,70 @@ exports.handler = async (event, context) => {
       };
     }
 
+    // Services endpoint
+    if (endpoint === 'services' && httpMethod === 'GET') {
+      // Extract country ID from path (services/:countryId)
+      const countryId = pathParts[1];
+      
+      if (!countryId) {
+        return {
+          statusCode: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Country ID is required' })
+        };
+      }
+
+      // Fallback services data (in a real implementation, this would come from SMS provider)
+      const fallbackServices = [
+        {
+          id: '1',
+          name: 'WhatsApp',
+          description: 'SMS verification for WhatsApp',
+          price: 2.50,
+          countryId: countryId,
+          available: true
+        },
+        {
+          id: '2', 
+          name: 'Telegram',
+          description: 'SMS verification for Telegram',
+          price: 2.75,
+          countryId: countryId,
+          available: true
+        },
+        {
+          id: '3',
+          name: 'Google',
+          description: 'SMS verification for Google',
+          price: 3.00,
+          countryId: countryId,
+          available: true
+        },
+        {
+          id: '4',
+          name: 'Facebook',
+          description: 'SMS verification for Facebook',
+          price: 2.80,
+          countryId: countryId,
+          available: true
+        },
+        {
+          id: '5',
+          name: 'Instagram',
+          description: 'SMS verification for Instagram',
+          price: 2.90,
+          countryId: countryId,
+          available: true
+        }
+      ];
+
+      return {
+        statusCode: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify(fallbackServices)
+      };
+    }
+
     // Account balance endpoint (requires authentication)
     if (endpoint === 'account-balance' && httpMethod === 'GET') {
       try {
