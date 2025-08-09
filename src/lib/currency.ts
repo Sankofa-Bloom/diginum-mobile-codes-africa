@@ -67,8 +67,18 @@ export class CurrencyService {
   static async getExchangeRates(): Promise<ExchangeRate[]> {
     try {
       // Try to get from backend first
-      const rates = await apiClient.get('/exchange-rates');
-      return rates.rates || rates;
+      const response = await apiClient.get('/exchange-rates');
+      const ratesData = response.rates || response;
+      
+      // Transform API response to match ExchangeRate interface
+      const rates = ratesData.map((rate: any) => ({
+        currency: rate.code || rate.currency,
+        rate: rate.rate,
+        vat: rate.vat || 0,
+        updated_at: rate.updated_at || new Date().toISOString()
+      }));
+      
+      return rates;
     } catch (error) {
       console.error('Error fetching from backend:', error);
     }
