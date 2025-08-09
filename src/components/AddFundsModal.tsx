@@ -147,8 +147,20 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
         const response = await apiClient.get(`/add-funds/status/${reference}`);
         
         if (response.data?.status === 'completed') {
-          toast.success('Payment completed! Funds added to your account.');
-          onFundsAdded(response.data.amount_usd);
+          console.log('Payment completed! Response:', response.data);
+          const creditedAmount = response.data.amountCredited || response.data.amount_usd || 10;
+          const newBalance = response.data.newBalance;
+          
+          toast.success(response.data.message || 'Payment completed! Funds added to your account.');
+          
+          // Update the balance in parent component
+          if (newBalance !== undefined && newBalance !== null) {
+            onFundsAdded(newBalance); // Use the new total balance
+          } else {
+            // Fallback: add the credited amount to current balance
+            onFundsAdded(currentBalance + creditedAmount);
+          }
+          
           setIsOpen(false);
           resetForm();
           return;

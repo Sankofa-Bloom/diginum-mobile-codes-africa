@@ -129,10 +129,15 @@ const BuyPage = () => {
     setLoadingBalance(true);
     try {
       const response = await apiClient.get('/account-balance');
-      setAccountBalance(response.balance);
+      console.log('Balance API response:', response);
+      // Handle both response.data.balance and response.balance for compatibility
+      const balance = response.data?.balance !== undefined ? response.data.balance : response.balance;
+      setAccountBalance(balance || 0);
+      console.log('Account balance loaded:', balance);
     } catch (error: any) {
       console.error('Error loading account balance:', error);
       toast.error('Failed to load account balance');
+      setAccountBalance(0); // Default to $0 on error
     } finally {
       setLoadingBalance(false);
     }
