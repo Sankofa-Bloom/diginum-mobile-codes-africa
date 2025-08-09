@@ -28,7 +28,7 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'traditional' | 'fapshi'>('traditional');
+  const [paymentMethod, setPaymentMethod] = useState<'traditional' | 'fapshi'>('fapshi');
   const [conversion, setConversion] = useState<{
     originalAmount: number;
     convertedAmount: number;
@@ -200,7 +200,7 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
             Add Funds to Account
           </DialogTitle>
           <DialogDescription>
-            Add funds to your account balance using mobile money. Current balance: {formatPrice(currentBalance, 'USD')}
+            Add funds to your account balance using Fapshi mobile money (MTN & Orange). Current balance: {formatPrice(currentBalance, 'USD')}
           </DialogDescription>
         </DialogHeader>
         
@@ -286,46 +286,21 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
             </Button>
           </div>
 
-          {/* Payment Method Selection (only show for XAF) */}
+          {/* Payment Method - Fapshi Only */}
           {isFapshiSupported(userCurrency) && (
-            <div>
-              <Label className="text-sm font-medium">Payment Method</Label>
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <Button
-                  variant={paymentMethod === 'traditional' ? 'default' : 'outline'}
-                  onClick={() => setPaymentMethod('traditional')}
-                  className="h-auto p-3 text-left"
-                  disabled={isProcessingPayment}
-                >
-                  <div className="flex items-center gap-2">
-                    <Phone className="h-4 w-4" />
-                    <div>
-                      <div className="font-medium text-xs">Traditional</div>
-                      <div className="text-xs text-muted-foreground">Mobile Money</div>
-                    </div>
-                  </div>
-                </Button>
-                <Button
-                  variant={paymentMethod === 'fapshi' ? 'default' : 'outline'}
-                  onClick={() => setPaymentMethod('fapshi')}
-                  className="h-auto p-3 text-left"
-                  disabled={isProcessingPayment}
-                >
-                  <div className="flex items-center gap-2">
-                    <Smartphone className="h-4 w-4" />
-                    <div>
-                      <div className="font-medium text-xs">Fapshi</div>
-                      <div className="text-xs text-muted-foreground">MTN/Orange</div>
-                    </div>
-                  </div>
-                </Button>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-blue-800">
+                <Smartphone className="h-5 w-5" />
+                <div>
+                  <div className="font-medium text-sm">Fapshi Payment</div>
+                  <div className="text-xs text-blue-600">MTN Mobile Money & Orange Money</div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Phone Number Input - only show for traditional payment */}
-          {(!isFapshiSupported(userCurrency) || paymentMethod === 'traditional') && (
-            <div>
+          {/* Phone Number Input */}
+          <div>
               <Label htmlFor="phoneNumber" className="flex items-center gap-2">
                 <Phone className="h-4 w-4" />
                 Phone Number
@@ -339,8 +314,7 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
                 className="mt-1"
                 disabled={isProcessingPayment}
               />
-            </div>
-          )}
+          </div>
 
           {/* Payment Processing Status */}
           {isProcessingPayment && (
@@ -359,21 +333,24 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
           )}
 
           {/* Fapshi Payment Component */}
-          {isFapshiSupported(userCurrency) && paymentMethod === 'fapshi' && conversion && (
+          {isFapshiSupported(userCurrency) && conversion && (
             <div className="border rounded-lg p-4 bg-blue-50">
               <FapshiPayment
                 amount={conversion.convertedAmount}
                 currency={userCurrency}
                 onSuccess={handleFapshiSuccess}
                 onError={handleFapshiError}
-                onCancel={() => setPaymentMethod('traditional')}
+                onCancel={() => {
+                  setIsProcessingPayment(false);
+                  setPaymentReference('');
+                }}
                 description={`DigiNum Account Top-up - $${amount} USD`}
               />
             </div>
           )}
 
-          {/* Traditional Payment Action Buttons */}
-          {(!isFapshiSupported(userCurrency) || paymentMethod === 'traditional') && (
+          {/* Payment Action Buttons for non-Fapshi currencies */}
+          {!isFapshiSupported(userCurrency) && (
             <div className="flex gap-2">
               <Button
                 onClick={handleAddFunds}
