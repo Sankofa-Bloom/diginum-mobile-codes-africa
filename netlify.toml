@@ -11,17 +11,16 @@
 [[plugins]]
   package = "@netlify/plugin-functions-install-core"
 
-# Redirect all requests to index.html for SPA routing
+# API redirects to Netlify Functions (must come first)
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+
+# Redirect all other requests to index.html for SPA routing
 [[redirects]]
   from = "/*"
   to = "/index.html"
-  status = 200
-  conditions = {Role = ["visitor"]}
-
-# API redirects to Netlify Functions
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
   status = 200
 
 # Headers for security

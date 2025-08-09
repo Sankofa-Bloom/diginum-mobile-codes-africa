@@ -74,10 +74,13 @@ exports.handler = async (event, context) => {
 
   try {
     const requestBody = parseBody(body, headers['content-type']);
-    const pathParts = path.replace('/api/', '').split('/');
+    // In Netlify Functions, path is like '/.netlify/functions/api/health'
+    // We need to extract everything after the function name
+    const pathAfterFunction = path.replace('/.netlify/functions/api', '') || '/';
+    const pathParts = pathAfterFunction.startsWith('/') ? pathAfterFunction.substring(1).split('/') : pathAfterFunction.split('/');
     const endpoint = pathParts[0];
 
-    console.log(`API Request: ${httpMethod} ${path}`, { endpoint, pathParts });
+    console.log(`API Request: ${httpMethod} ${path}`, { pathAfterFunction, endpoint, pathParts });
 
     // Exchange rates endpoint
     if (endpoint === 'exchange-rates' && httpMethod === 'GET') {
@@ -192,12 +195,12 @@ exports.handler = async (event, context) => {
       }
     }
 
-    // Health check
-    if (endpoint === 'health' && httpMethod === 'GET') {
+    // Health check - handle both empty path and /health
+    if ((endpoint === 'health' || endpoint === '' || pathAfterFunction === '/') && httpMethod === 'GET') {
       return {
         statusCode: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'ok', time: new Date().toISOString() })
+        body: JSON.stringify({ status: 'ok', time: new Date().toISOString(), path: pathAfterFunction })
       };
     }
 
