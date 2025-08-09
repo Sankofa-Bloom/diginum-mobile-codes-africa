@@ -6,6 +6,31 @@
 [build.environment]
   NODE_VERSION = "18"
   NPM_VERSION = "8"
+  NODE_ENV = "production"
+
+# Production context
+[context.production]
+  command = "npm run build && cd netlify/functions && npm install"
+  
+[context.production.environment]
+  NODE_ENV = "production"
+  VITE_DEPLOY_CONTEXT = "production"
+
+# Deploy preview context (for pull requests)
+[context.deploy-preview]
+  command = "npm run build && cd netlify/functions && npm install"
+  
+[context.deploy-preview.environment]
+  NODE_ENV = "staging"
+  VITE_DEPLOY_CONTEXT = "deploy-preview"
+
+# Branch deploy context (for feature branches)
+[context.branch-deploy]
+  command = "npm run build && cd netlify/functions && npm install"
+  
+[context.branch-deploy.environment]
+  NODE_ENV = "development"
+  VITE_DEPLOY_CONTEXT = "branch-deploy"
 
 # Plugin to auto-install function dependencies
 [[plugins]]
