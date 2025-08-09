@@ -1,154 +1,315 @@
 import { supabase } from '@/lib/supabaseClient';
 
 export interface ExchangeRate {
-  id: string;
   currency: string;
   rate: number;
-  markup: number;
-  updatedAt: string;
+  vat: number;
+  updated_at: string;
 }
 
-export interface PriceAdjustment {
-  id: string;
-  service: string;
+export interface CurrencyConversion {
+  originalAmount: number; // USD amount
+  convertedAmount: number; // Local currency amount
+  currency: string;
+  rate: number;
+  fxBuffer: number;
+  finalAmount: number; // Amount with FX buffer
+}
+
+export interface UserLocation {
   country: string;
-  markup: number;
-  updatedAt: string;
+  currency: string;
+  ip: string;
 }
 
 export class CurrencyService {
+  private static readonly FX_BUFFER = 0.025; // 2.5% buffer for FX volatility
+  private static readonly API_KEY = 'YOUR_API_KEY'; // Replace with actual API key
+  private static readonly CURRENCY_API_URL = 'https://api.exchangerate-api.com/v4/latest/USD';
+
+  // Get user's location and currency based on IP
+  static async getUserLocation(): Promise<UserLocation> {
+    try {
+      // First try to get from IP geolocation
+      const response = await fetch('https://ipapi.co/json/');
+      const data = await response.json();
+      
+      return {
+        country: data.country_name || 'United States',
+        currency: data.currency || 'USD',
+        ip: data.ip || 'unknown'
+      };
+    } catch (error) {
+      console.error('Error getting user location:', error);
+      // Fallback to USD
+      return {
+        country: 'United States',
+        currency: 'USD',
+        ip: 'unknown'
+      };
+    }
+  }
+
+  // Fetch live exchange rates from API
+  static async fetchLiveRates(): Promise<Record<string, number>> {
+    try {
+      const response = await fetch(this.CURRENCY_API_URL);
+      const data = await response.json();
+      return data.rates || {};
+    } catch (error) {
+      console.error('Error fetching live rates:', error);
+      throw new Error('Failed to fetch live exchange rates');
+    }
+  }
+
+  // Get exchange rates from backend (with fallback to live API)
   static async getExchangeRates(): Promise<ExchangeRate[]> {
-    const { data, error } = await supabase
-      .from('exchange_rates')
-      .select('*')
-      .order('updatedAt', { ascending: false });
-    
-    if (error) throw error;
-    return data || [];
-  }
-
-  static async getExchangeRate(currency: string): Promise<ExchangeRate | null> {
-    const { data, error } = await supabase
-      .from('exchange_rates')
-      .select('*')
-      .eq('currency', currency)
-      .order('updatedAt', { ascending: false })
-      .single();
-    
-    if (error) throw error;
-    return data;
-  }
-
-  static async updateExchangeRate(currency: string, rate: number, markup: number): Promise<void> {
-    const { error } = await supabase
-      .from('exchange_rates')
-      .insert([
-        {
-          currency,
-          rate,
-          markup,
-          updatedAt: new Date().toISOString(),
-        }
-      ]);
-    
-    if (error) throw error;
-  }
-
-  static async getPriceAdjustments(): Promise<PriceAdjustment[]> {
-    const { data, error } = await supabase
-      .from('price_adjustments')
-      .select('*')
-      .order('updatedAt', { ascending: false });
-    
-    if (error) throw error;
-    return data || [];
-  }
-
-  static async getPriceAdjustment(service: string, country: string): Promise<PriceAdjustment | null> {
-    const { data, error } = await supabase
-      .from('price_adjustments')
-      .select('*')
-      .eq('service', service)
-      .eq('country', country)
-      .order('updatedAt', { ascending: false })
-      .single();
-    
-    if (error) throw error;
-    return data;
-  }
-
-  static async updatePriceAdjustment(service: string, country: string, markup: number): Promise<void> {
-    const { error } = await supabase
-      .from('price_adjustments')
-      .insert([
-        {
-          service,
-          country,
-          markup,
-          updatedAt: new Date().toISOString(),
-        }
-      ]);
-    
-    if (error) throw error;
-  }
-
-  static formatPrice(price: number): string {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(price);
-  }
-
-  static async convertPrice(
-    price: number
-  ): Promise<number> {
     try {
-      // Return price with markup for USD
-      const rate = await this.getExchangeRate('USD');
+      // Try to get from backend first
+      const response = await fetch('/api/exchange-rates');
+      if (response.ok) {
+        const rates = await response.json();
+        return rates;
+      }
+    } catch (error) {
+      console.error('Error fetching from backend:', error);
+    }
+
+    // Fallback to live API
+    try {
+      const liveRates = await this.fetchLiveRates();
+      const rates: ExchangeRate[] = [
+        { currency: 'USD', rate: 1.0, vat: 0, updated_at: new Date().toISOString() }
+      ];
+
+      // Convert live rates to our format
+      for (const [currency, rate] of Object.entries(liveRates)) {
+        if (currency !== 'USD') {
+          rates.push({
+            currency: currency.toUpperCase(),
+            rate: rate as number,
+            vat: this.getVATForCurrency(currency.toUpperCase()),
+            updated_at: new Date().toISOString()
+          });
+        }
+      }
+
+      return rates;
+    } catch (error) {
+      console.error('Error with live rates fallback:', error);
+      // Final fallback to hardcoded rates
+      return this.getFallbackRates();
+    }
+  }
+
+  // Get VAT rate for a specific currency
+  private static getVATForCurrency(currency: string): number {
+    const vatRates: Record<string, number> = {
+      'USD': 0,
+      'EUR': 5.0,
+      'GBP': 5.0,
+      'JPY': 3.0,
+      'CAD': 5.0,
+      'AUD': 5.0,
+      'CHF': 3.0,
+      'CNY': 3.0,
+      'INR': 5.0,
+      'BRL': 5.0,
+      'MXN': 5.0,
+      'SGD': 3.0,
+      'HKD': 3.0,
+      'SEK': 5.0,
+      'NOK': 5.0,
+      'DKK': 5.0,
+      'PLN': 5.0,
+      'CZK': 5.0,
+      'HUF': 5.0,
+      'RUB': 5.0,
+      'TRY': 5.0,
+      'ZAR': 5.0,
+      'KRW': 3.0,
+      'THB': 3.0,
+      'MYR': 3.0,
+      'IDR': 3.0,
+      'PHP': 3.0,
+      'VND': 3.0,
+      'NGN': 5.0,
+      'EGP': 5.0,
+      'KES': 5.0,
+      'GHS': 5.0
+    };
+
+    return vatRates[currency] || 5.0; // Default to 5% VAT
+  }
+
+  // Fallback rates if all else fails
+  private static getFallbackRates(): ExchangeRate[] {
+    return [
+      { currency: 'USD', rate: 1.00, vat: 0, updated_at: new Date().toISOString() },
+      { currency: 'EUR', rate: 0.92, vat: 5.0, updated_at: new Date().toISOString() },
+      { currency: 'GBP', rate: 0.79, vat: 5.0, updated_at: new Date().toISOString() },
+      { currency: 'JPY', rate: 148.50, vat: 3.0, updated_at: new Date().toISOString() },
+      { currency: 'CAD', rate: 1.35, vat: 5.0, updated_at: new Date().toISOString() },
+      { currency: 'AUD', rate: 1.52, vat: 5.0, updated_at: new Date().toISOString() },
+      { currency: 'CHF', rate: 0.88, vat: 3.0, updated_at: new Date().toISOString() },
+      { currency: 'CNY', rate: 7.25, vat: 3.0, updated_at: new Date().toISOString() },
+      { currency: 'INR', rate: 83.20, vat: 5.0, updated_at: new Date().toISOString() },
+      { currency: 'BRL', rate: 4.95, vat: 5.0, updated_at: new Date().toISOString() },
+      { currency: 'MXN', rate: 17.25, vat: 5.0, updated_at: new Date().toISOString() },
+      { currency: 'SGD', rate: 1.34, vat: 3.0, updated_at: new Date().toISOString() },
+      { currency: 'HKD', rate: 7.82, vat: 3.0, updated_at: new Date().toISOString() },
+      { currency: 'NGN', rate: 920.00, vat: 5.0, updated_at: new Date().toISOString() },
+      { currency: 'EGP', rate: 31.20, vat: 5.0, updated_at: new Date().toISOString() },
+      { currency: 'KES', rate: 158.50, vat: 5.0, updated_at: new Date().toISOString() },
+      { currency: 'GHS', rate: 12.45, vat: 5.0, updated_at: new Date().toISOString() }
+    ];
+  }
+
+  // Convert USD amount to local currency with FX buffer
+  static async convertUSDToLocal(
+    usdAmount: number, 
+    targetCurrency: string = 'USD'
+  ): Promise<CurrencyConversion> {
+    try {
+      const rates = await this.getExchangeRates();
+      const rate = rates.find(r => r.currency === targetCurrency);
+      
       if (!rate) {
-        throw new Error('Exchange rate not found for USD');
+        throw new Error(`Exchange rate not found for ${targetCurrency}`);
       }
 
-      const finalPrice = price * (1 + rate.markup);
+      // Convert USD to local currency
+      const convertedAmount = usdAmount * rate.rate;
+      
+      // Apply FX buffer for volatility protection
+      const fxBuffer = convertedAmount * this.FX_BUFFER;
+      const finalAmount = convertedAmount + fxBuffer;
 
-      return parseFloat(finalPrice.toFixed(2));
+      return {
+        originalAmount: usdAmount,
+        convertedAmount: convertedAmount,
+        currency: targetCurrency,
+        rate: rate.rate,
+        fxBuffer: fxBuffer,
+        finalAmount: finalAmount
+      };
     } catch (error) {
-      console.error('Error converting price:', error);
+      console.error('Error converting USD to local currency:', error);
       throw error;
     }
   }
 
-  static async applyPriceAdjustment(
-    price: number,
-    service: string,
-    country: string
+  // Convert local currency back to USD
+  static async convertLocalToUSD(
+    localAmount: number,
+    sourceCurrency: string
   ): Promise<number> {
     try {
-      const adjustment = await this.getPriceAdjustment(service, country);
-      if (adjustment) {
-        return price * (1 + adjustment.markup);
+      const rates = await this.getExchangeRates();
+      const rate = rates.find(r => r.currency === sourceCurrency);
+      
+      if (!rate) {
+        throw new Error(`Exchange rate not found for ${sourceCurrency}`);
       }
-      return price;
+
+      // Convert local currency to USD
+      return localAmount / rate.rate;
     } catch (error) {
-      console.error('Error applying price adjustment:', error);
+      console.error('Error converting local currency to USD:', error);
       throw error;
     }
   }
 
-  static async convertCurrency(amount: number, isStripePayment = false): Promise<number> {
+  // Format price with currency symbol
+  static formatPrice(amount: number, currency: string = 'USD'): string {
     try {
-      // For Stripe payments, add processing fees
-      if (isStripePayment) {
-        // Stripe typically charges 2.9% + $0.30 per transaction
-        const stripeFee = amount * 0.029 + 0.3;
-        return amount + stripeFee;
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency
+      }).format(amount);
+    } catch (error) {
+      // Fallback formatting
+      return `${currency} ${amount.toFixed(2)}`;
+    }
+  }
+
+  // Get currency symbol
+  static getCurrencySymbol(currency: string): string {
+    const symbols: Record<string, string> = {
+      'USD': '$',
+      'EUR': '€',
+      'GBP': '£',
+      'JPY': '¥',
+      'CAD': 'C$',
+      'AUD': 'A$',
+      'CHF': 'CHF',
+      'CNY': '¥',
+      'INR': '₹',
+      'BRL': 'R$',
+      'MXN': '$',
+      'SGD': 'S$',
+      'HKD': 'HK$',
+      'NGN': '₦',
+      'EGP': 'E£',
+      'KES': 'KSh',
+      'GHS': 'GH₵'
+    };
+
+    return symbols[currency] || currency;
+  }
+
+  // Save payment transaction to database
+  static async savePaymentTransaction(
+    originalAmount: number,
+    convertedAmount: number,
+    currency: string,
+    rate: number,
+    fxBuffer: number,
+    userId?: string
+  ): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('payment_transactions')
+        .insert([
+          {
+            user_id: userId,
+            original_amount_usd: originalAmount,
+            converted_amount: convertedAmount,
+            currency: currency,
+            exchange_rate: rate,
+            fx_buffer: fxBuffer,
+            created_at: new Date().toISOString()
+          }
+        ]);
+
+      if (error) {
+        console.error('Error saving payment transaction:', error);
+      }
+    } catch (error) {
+      console.error('Error saving payment transaction:', error);
+    }
+  }
+
+  // Get user's preferred currency (from IP or stored preference)
+  static async getUserCurrency(): Promise<string> {
+    try {
+      // Check if user has stored preference
+      const storedCurrency = localStorage.getItem('user_currency');
+      if (storedCurrency) {
+        return storedCurrency;
       }
 
-      // For non-Stripe payments, just return the amount
-      return amount;
+      // Get from IP location
+      const location = await this.getUserLocation();
+      return location.currency;
     } catch (error) {
-      console.error('Error converting currency:', error);
-      throw error;
+      console.error('Error getting user currency:', error);
+      return 'USD';
     }
+  }
+
+  // Set user's preferred currency
+  static setUserCurrency(currency: string): void {
+    localStorage.setItem('user_currency', currency);
   }
 }

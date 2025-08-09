@@ -3,17 +3,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, DollarSign, CreditCard, Globe, Calculator, Phone } from 'lucide-react';
+import { Loader2, DollarSign, CreditCard, Globe, Calculator, Phone, AlertCircle, Smartphone } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '@/lib/apiClient';
-
-interface ExchangeRate {
-  currency: string;
-  rate: number;
-  markup: number;
-  updated_at: string;
-}
+import { useCurrency } from '@/contexts/CurrencyContext';
+import { CurrencyService } from '@/lib/currency';
+import FapshiPayment from '@/components/FapshiPayment';
+import { isFapshiSupported } from '@/lib/fapshi';
 
 interface AddFundsModalProps {
   currentBalance: number;
@@ -26,60 +22,44 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
   onFundsAdded, 
   trigger 
 }) => {
+  const { userCurrency, setUserCurrency, convertUSDToLocal, formatPrice } = useCurrency();
   const [isOpen, setIsOpen] = useState(false);
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState('USD');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [exchangeRates, setExchangeRates] = useState<ExchangeRate[]>([]);
-  const [selectedRate, setSelectedRate] = useState<ExchangeRate | null>(null);
-  const [usdAmount, setUsdAmount] = useState(0);
+  const [paymentMethod, setPaymentMethod] = useState<'traditional' | 'fapshi'>('traditional');
+  const [conversion, setConversion] = useState<{
+    originalAmount: number;
+    convertedAmount: number;
+    currency: string;
+    rate: number;
+    fxBuffer: number;
+    finalAmount: number;
+  } | null>(null);
   const [paymentReference, setPaymentReference] = useState('');
 
   const presetAmounts = [5, 10, 20, 50, 100];
 
-  // Fetch exchange rates on component mount
+  // Calculate conversion when amount changes
   useEffect(() => {
-    fetchExchangeRates();
-  }, []);
-
-        // Calculate USD amount when amount or currency changes
-      useEffect(() => {
-        if (amount && selectedRate) {
+    const calculateConversion = async () => {
+      if (amount && parseFloat(amount) > 0) {
+        try {
           const numAmount = parseFloat(amount);
-          const markup = selectedRate.markup || 10.0;
-          // Convert to USD: amount / rate (e.g., 100 EUR / 0.85 = 117.65 USD)
-          const baseUsdAmount = numAmount / selectedRate.rate;
-          // Add markup: base amount * (1 + markup/100)
-          const calculatedUsdAmount = baseUsdAmount * (1 + markup / 100);
-          setUsdAmount(calculatedUsdAmount);
-        } else {
-          setUsdAmount(0);
+          const result = await convertUSDToLocal(numAmount, userCurrency);
+          setConversion(result);
+        } catch (error) {
+          console.error('Error calculating conversion:', error);
+          setConversion(null);
         }
-      }, [amount, selectedRate]);
-
-  // Update selected rate when currency changes
-  useEffect(() => {
-    const rate = exchangeRates.find(r => r.currency === currency);
-    setSelectedRate(rate || null);
-  }, [currency, exchangeRates]);
-
-  const fetchExchangeRates = async () => {
-    try {
-      const response = await apiClient.get('/exchange-rates');
-      setExchangeRates(response);
-      
-      // Set default currency to USD
-      const usdRate = response.find((r: ExchangeRate) => r.currency === 'USD');
-      if (usdRate) {
-        setSelectedRate(usdRate);
+      } else {
+        setConversion(null);
       }
-    } catch (error) {
-      console.error('Error fetching exchange rates:', error);
-      toast.error('Failed to load exchange rates');
-    }
-  };
+    };
+
+    calculateConversion();
+  }, [amount, userCurrency, convertUSDToLocal]);
 
   const handleAddFunds = async () => {
     const numAmount = parseFloat(amount);
@@ -93,22 +73,37 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
       return;
     }
 
+    if (!conversion) {
+      toast.error('Please wait for conversion calculation');
+      return;
+    }
+
     setIsLoading(true);
     try {
+      // Save transaction to database
+      await CurrencyService.savePaymentTransaction(
+        conversion.originalAmount,
+        conversion.finalAmount,
+        conversion.currency,
+        conversion.rate,
+        conversion.fxBuffer
+      );
+
       const response = await apiClient.post('/add-funds/campay', {
-        amount: numAmount,
-        currency: currency,
-        phoneNumber: phoneNumber.trim()
+        amount: conversion.finalAmount, // Send converted amount with FX buffer
+        currency: conversion.currency, // Send local currency
+        phoneNumber: phoneNumber,
+        originalAmountUSD: conversion.originalAmount // Include original USD amount for reference
       });
 
-      if (response.success) {
-        setPaymentReference(response.reference);
+      if (response.data?.success) {
+        setPaymentReference(response.data.reference);
         setIsProcessingPayment(true);
         
         toast.success('Payment initiated! Please complete the payment on your mobile money app.');
         
         // Start polling for payment status
-        pollPaymentStatus(response.reference);
+        pollPaymentStatus(response.data.reference);
       } else {
         toast.error('Failed to initiate payment');
       }
@@ -128,13 +123,13 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
       try {
         const response = await apiClient.get(`/add-funds/status/${reference}`);
         
-        if (response.status === 'completed') {
+        if (response.data?.status === 'completed') {
           toast.success('Payment completed! Funds added to your account.');
-          onFundsAdded(response.amount_usd);
+          onFundsAdded(response.data.amount_usd);
           setIsOpen(false);
           resetForm();
           return;
-        } else if (response.status === 'failed') {
+        } else if (response.data?.status === 'failed') {
           toast.error('Payment failed or was cancelled');
           setIsProcessingPayment(false);
           return;
@@ -166,21 +161,26 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
     setAmount(presetAmount.toString());
   };
 
-  const resetForm = () => {
-    setAmount('');
-    setCurrency('USD');
-    setPhoneNumber('');
-    setPaymentReference('');
+  const handleFapshiSuccess = (paymentData: any) => {
+    toast.success('Payment completed successfully!');
+    // The amount will be in the original amount specified
+    onFundsAdded(parseFloat(amount));
+    setIsOpen(false);
+    resetForm();
+  };
+
+  const handleFapshiError = (error: string) => {
+    toast.error(`Payment failed: ${error}`);
     setIsProcessingPayment(false);
   };
 
-  const formatCurrency = (amount: number, currencyCode: string) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currencyCode,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(amount);
+  const resetForm = () => {
+    setAmount('');
+    setPhoneNumber('');
+    setConversion(null);
+    setPaymentReference('');
+    setIsProcessingPayment(false);
+    setPaymentMethod('traditional');
   };
 
   return (
@@ -200,115 +200,18 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
             Add Funds to Account
           </DialogTitle>
           <DialogDescription>
-            Add funds to your account balance using mobile money. Current balance: ${currentBalance.toFixed(2)}
+            Add funds to your account balance using mobile money. Current balance: {formatPrice(currentBalance, 'USD')}
           </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4">
-          {/* Currency Selection */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <Label htmlFor="currency" className="flex items-center gap-2">
-                <Globe className="h-4 w-4" />
-                Currency
-              </Label>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={fetchExchangeRates}
-                disabled={isLoading}
-                className="text-xs"
-              >
-                <Loader2 className={`h-3 w-3 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
-                Refresh Rates
-              </Button>
-            </div>
-            <Select value={currency} onValueChange={setCurrency}>
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select currency" />
-              </SelectTrigger>
-              <SelectContent>
-                {exchangeRates.map((rate) => (
-                  <SelectItem key={rate.currency} value={rate.currency}>
-                    {rate.currency} - {rate.currency === 'USD' ? 'US Dollar' : 
-                      rate.currency === 'EUR' ? 'Euro' :
-                      rate.currency === 'GBP' ? 'British Pound' :
-                      rate.currency === 'JPY' ? 'Japanese Yen' :
-                      rate.currency === 'CAD' ? 'Canadian Dollar' :
-                      rate.currency === 'AUD' ? 'Australian Dollar' :
-                      rate.currency === 'CHF' ? 'Swiss Franc' :
-                      rate.currency === 'CNY' ? 'Chinese Yuan' :
-                      rate.currency === 'INR' ? 'Indian Rupee' :
-                      rate.currency === 'BRL' ? 'Brazilian Real' :
-                      rate.currency === 'MXN' ? 'Mexican Peso' :
-                      rate.currency === 'SGD' ? 'Singapore Dollar' :
-                      rate.currency === 'HKD' ? 'Hong Kong Dollar' :
-                      rate.currency === 'SEK' ? 'Swedish Krona' :
-                      rate.currency === 'NOK' ? 'Norwegian Krone' :
-                      rate.currency === 'DKK' ? 'Danish Krone' :
-                      rate.currency === 'PLN' ? 'Polish Złoty' :
-                      rate.currency === 'CZK' ? 'Czech Koruna' :
-                      rate.currency === 'HUF' ? 'Hungarian Forint' :
-                      rate.currency === 'RUB' ? 'Russian Ruble' :
-                      rate.currency === 'TRY' ? 'Turkish Lira' :
-                      rate.currency === 'ZAR' ? 'South African Rand' :
-                      rate.currency === 'KRW' ? 'South Korean Won' :
-                      rate.currency === 'THB' ? 'Thai Baht' :
-                      rate.currency === 'MYR' ? 'Malaysian Ringgit' :
-                      rate.currency === 'IDR' ? 'Indonesian Rupiah' :
-                      rate.currency === 'PHP' ? 'Philippine Peso' :
-                      rate.currency === 'VND' ? 'Vietnamese Dong' :
-                      rate.currency === 'NGN' ? 'Nigerian Naira' :
-                      rate.currency === 'EGP' ? 'Egyptian Pound' :
-                      rate.currency === 'KES' ? 'Kenyan Shilling' :
-                      rate.currency === 'GHS' ? 'Ghanaian Cedi' :
-                      rate.currency === 'UGX' ? 'Ugandan Shilling' :
-                      rate.currency === 'TZS' ? 'Tanzanian Shilling' :
-                      rate.currency === 'XAF' ? 'Central African CFA Franc' :
-                      rate.currency === 'XOF' ? 'West African CFA Franc' :
-                      rate.currency === 'MAD' ? 'Moroccan Dirham' :
-                      rate.currency === 'TND' ? 'Tunisian Dinar' :
-                      rate.currency === 'DZD' ? 'Algerian Dinar' :
-                      rate.currency === 'LYD' ? 'Libyan Dinar' :
-                      rate.currency === 'SDG' ? 'Sudanese Pound' :
-                      rate.currency === 'ETB' ? 'Ethiopian Birr' :
-                      rate.currency === 'SOS' ? 'Somali Shilling' :
-                      rate.currency === 'DJF' ? 'Djiboutian Franc' :
-                      rate.currency === 'KMF' ? 'Comorian Franc' :
-                      rate.currency === 'MUR' ? 'Mauritian Rupee' :
-                      rate.currency === 'SCR' ? 'Seychellois Rupee' :
-                      rate.currency === 'CVE' ? 'Cape Verdean Escudo' :
-                      rate.currency === 'STD' ? 'São Tomé and Príncipe Dobra' :
-                      rate.currency === 'GMD' ? 'Gambian Dalasi' :
-                      rate.currency === 'GNF' ? 'Guinean Franc' :
-                      rate.currency === 'SLL' ? 'Sierra Leonean Leone' :
-                      rate.currency === 'LRD' ? 'Liberian Dollar' :
-                      rate.currency === 'CDF' ? 'Congolese Franc' :
-                      rate.currency === 'RWF' ? 'Rwandan Franc' :
-                      rate.currency === 'BIF' ? 'Burundian Franc' :
-                      rate.currency === 'MWK' ? 'Malawian Kwacha' :
-                      rate.currency === 'ZMW' ? 'Zambian Kwacha' :
-                      rate.currency === 'ZWL' ? 'Zimbabwean Dollar' :
-                      rate.currency === 'NAD' ? 'Namibian Dollar' :
-                      rate.currency === 'BWP' ? 'Botswana Pula' :
-                      rate.currency === 'SZL' ? 'Eswatini Lilangeni' :
-                      rate.currency === 'LSL' ? 'Lesotho Loti' :
-                      rate.currency === 'MZN' ? 'Mozambican Metical' :
-                      rate.currency === 'AOA' ? 'Angolan Kwanza' :
-                      rate.currency === 'STN' ? 'São Tomé and Príncipe Dobra' : rate.currency}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           {/* Amount Input */}
           <div>
-            <Label htmlFor="amount">Amount ({currency})</Label>
+            <Label htmlFor="amount">Amount (USD)</Label>
             <Input
               id="amount"
               type="number"
-              placeholder="Enter amount"
+              placeholder="Enter amount in USD"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               min="0.01"
@@ -318,111 +221,204 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
             />
           </div>
 
-          {/* Exchange Rate Display */}
-          {selectedRate && amount && (
-            <div className="bg-muted p-3 rounded-lg">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                <Calculator className="h-4 w-4" />
-                Exchange Rate & Fees
-              </div>
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span>Exchange Rate:</span>
-                  <span>1 USD = {selectedRate.rate.toFixed(6)} {currency}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Markup ({selectedRate.markup}%):</span>
-                  <span>+{selectedRate.markup}%</span>
-                </div>
-                <div className="flex justify-between font-medium border-t pt-1">
-                  <span>Total in USD:</span>
-                  <span>${usdAmount.toFixed(2)}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Phone Number Input */}
+          {/* Preset Amounts */}
           <div>
-            <Label htmlFor="phoneNumber" className="flex items-center gap-2">
-              <Phone className="h-4 w-4" />
-              Mobile Money Phone Number
-            </Label>
-            <Input
-              id="phoneNumber"
-              type="tel"
-              placeholder="Enter your phone number"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
-              className="mt-1"
-              disabled={isProcessingPayment}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              We'll send a payment request to this number via mobile money
-            </p>
-          </div>
-
-          {/* Quick Amounts */}
-          <div>
-            <Label className="text-sm text-muted-foreground">Quick Amounts</Label>
-            <div className="flex flex-wrap gap-2 mt-2">
+            <Label className="text-sm text-muted-foreground">Quick Select</Label>
+            <div className="flex flex-wrap gap-2 mt-1">
               {presetAmounts.map((presetAmount) => (
                 <Button
                   key={presetAmount}
                   variant="outline"
                   size="sm"
                   onClick={() => handlePresetAmount(presetAmount)}
-                  className="text-xs"
                   disabled={isProcessingPayment}
+                  className="text-xs"
                 >
-                  {formatCurrency(presetAmount, currency)}
+                  ${presetAmount}
                 </Button>
               ))}
             </div>
           </div>
 
-          {/* Payment Status */}
+          {/* Currency Conversion Display */}
+          {conversion && (
+            <div className="bg-muted p-3 rounded-lg">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                <Calculator className="h-4 w-4" />
+                Currency Conversion
+              </div>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span>Original Amount (USD):</span>
+                  <span>{formatPrice(conversion.originalAmount, 'USD')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Exchange Rate:</span>
+                  <span>1 USD = {conversion.rate.toFixed(6)} {conversion.currency}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Converted Amount:</span>
+                  <span>{formatPrice(conversion.convertedAmount, conversion.currency)}</span>
+                </div>
+                <div className="flex justify-between text-orange-600">
+                  <span>FX Buffer (2.5%):</span>
+                  <span>+{formatPrice(conversion.fxBuffer, conversion.currency)}</span>
+                </div>
+                <div className="flex justify-between font-medium border-t pt-1 text-green-600">
+                  <span>Final Amount:</span>
+                  <span>{formatPrice(conversion.finalAmount, conversion.currency)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Currency Info */}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Globe className="h-4 w-4" />
+            <span>Your currency: {userCurrency}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setUserCurrency('USD')}
+              className="h-6 px-2 text-xs"
+            >
+              Change
+            </Button>
+          </div>
+
+          {/* Payment Method Selection (only show for XAF) */}
+          {isFapshiSupported(userCurrency) && (
+            <div>
+              <Label className="text-sm font-medium">Payment Method</Label>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <Button
+                  variant={paymentMethod === 'traditional' ? 'default' : 'outline'}
+                  onClick={() => setPaymentMethod('traditional')}
+                  className="h-auto p-3 text-left"
+                  disabled={isProcessingPayment}
+                >
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4" />
+                    <div>
+                      <div className="font-medium text-xs">Traditional</div>
+                      <div className="text-xs text-muted-foreground">Mobile Money</div>
+                    </div>
+                  </div>
+                </Button>
+                <Button
+                  variant={paymentMethod === 'fapshi' ? 'default' : 'outline'}
+                  onClick={() => setPaymentMethod('fapshi')}
+                  className="h-auto p-3 text-left"
+                  disabled={isProcessingPayment}
+                >
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="h-4 w-4" />
+                    <div>
+                      <div className="font-medium text-xs">Fapshi</div>
+                      <div className="text-xs text-muted-foreground">MTN/Orange</div>
+                    </div>
+                  </div>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Phone Number Input - only show for traditional payment */}
+          {(!isFapshiSupported(userCurrency) || paymentMethod === 'traditional') && (
+            <div>
+              <Label htmlFor="phoneNumber" className="flex items-center gap-2">
+                <Phone className="h-4 w-4" />
+                Phone Number
+              </Label>
+              <Input
+                id="phoneNumber"
+                type="tel"
+                placeholder="Enter your phone number"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                className="mt-1"
+                disabled={isProcessingPayment}
+              />
+            </div>
+          )}
+
+          {/* Payment Processing Status */}
           {isProcessingPayment && (
-            <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <div className="flex items-center gap-2 text-blue-800">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Processing Payment...
+                <span className="font-medium">Processing Payment</span>
               </div>
               <p className="text-sm text-blue-600 mt-1">
-                Please complete the payment on your mobile money app. We'll notify you when it's confirmed.
+                Reference: {paymentReference}
+              </p>
+              <p className="text-xs text-blue-500 mt-1">
+                Please complete the payment on your mobile money app. This may take a few minutes.
               </p>
             </div>
           )}
 
-          {/* Action Buttons */}
-          <div className="flex justify-end gap-2 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsOpen(false);
-                resetForm();
-              }}
-              disabled={isLoading || isProcessingPayment}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAddFunds}
-              disabled={isLoading || !amount || !phoneNumber || isProcessingPayment}
-              className="gap-2"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Initiating...
-                </>
-              ) : (
-                <>
-                  <CreditCard className="h-4 w-4" />
-                  Pay with Mobile Money
-                </>
+          {/* Fapshi Payment Component */}
+          {isFapshiSupported(userCurrency) && paymentMethod === 'fapshi' && conversion && (
+            <div className="border rounded-lg p-4 bg-blue-50">
+              <FapshiPayment
+                amount={conversion.convertedAmount}
+                currency={userCurrency}
+                onSuccess={handleFapshiSuccess}
+                onError={handleFapshiError}
+                onCancel={() => setPaymentMethod('traditional')}
+                description={`DigiNum Account Top-up - $${amount} USD`}
+              />
+            </div>
+          )}
+
+          {/* Traditional Payment Action Buttons */}
+          {(!isFapshiSupported(userCurrency) || paymentMethod === 'traditional') && (
+            <div className="flex gap-2">
+              <Button
+                onClick={handleAddFunds}
+                disabled={isLoading || isProcessingPayment || !conversion}
+                className="flex-1"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Add Funds
+                  </>
+                )}
+              </Button>
+              
+              {isProcessingPayment && (
+                <Button
+                  variant="outline"
+                  onClick={() => setIsProcessingPayment(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
               )}
-            </Button>
+            </div>
+          )}
+
+          {/* Info Alert */}
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
+              <div className="text-sm text-yellow-800">
+                <p className="font-medium">Important:</p>
+                <ul className="mt-1 space-y-1 text-xs">
+                  <li>• All amounts are calculated in USD internally</li>
+                  <li>• A 2.5% FX buffer is added to protect against currency fluctuations</li>
+                  <li>• Payment will be processed in your local currency: {userCurrency}</li>
+                  <li>• Both original (USD) and converted amounts are saved for reporting</li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       </DialogContent>

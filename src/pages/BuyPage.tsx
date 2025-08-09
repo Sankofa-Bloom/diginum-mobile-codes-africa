@@ -105,18 +105,18 @@ const BuyPage = () => {
       try {
         const user = await getCurrentUser();
         setIsAuthenticated(!!user);
-        if (!user) {
-          toast.error('Please log in to purchase a service.');
-          navigate('/login', { state: { from: '/buy' } });
-          return; // Exit early if not authenticated
-        }
         
-        // Only load data if user is authenticated
+        // Always load countries (no authentication required)
         loadCountries();
-        loadAccountBalance();
+        
+        // Only load account balance if authenticated
+        if (user) {
+          loadAccountBalance();
+        }
       } catch (error) {
         console.error('Error checking authentication:', error);
-        toast.error('An error occurred while checking your authentication status.');
+        // Still load countries even if auth check fails
+        loadCountries();
       } finally {
         setIsLoading(false);
       }
@@ -169,6 +169,11 @@ const BuyPage = () => {
   const handleCountrySelect = (countryId: string) => {
     const country = countries.find(c => c.id === countryId);
     if (country) {
+      if (!isAuthenticated) {
+        toast.error('Please log in to continue with your purchase.');
+        navigate('/login', { state: { from: '/buy' } });
+        return;
+      }
       setSelectedCountry(country);
       loadServices(countryId);
     }
@@ -289,16 +294,121 @@ const BuyPage = () => {
     );
   }
 
+  // Show login prompt for unauthenticated users but still show the page
   if (!isAuthenticated) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-4">Authentication Required</h2>
-          <p className="mb-4">You need to be logged in to access this page.</p>
-          <Button onClick={() => navigate('/login', { state: { from: '/buy' } })}>
-            Go to Login
-          </Button>
+      <div className="container mx-auto p-4 max-w-4xl">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">Buy Phone Number</h1>
+          <p className="text-muted-foreground">Select a country and service to get a verification number</p>
+          
+          {/* Login Prompt */}
+          <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                <span className="font-semibold text-yellow-800">Login Required</span>
+              </div>
+              <Button onClick={() => navigate('/login', { state: { from: '/buy' } })}>
+                Login to Continue
+              </Button>
+            </div>
+            <p className="text-sm text-yellow-700 mt-2">
+              You need to be logged in to purchase a phone number. Please log in to continue.
+            </p>
+          </div>
         </div>
+
+        {/* Progress Steps */}
+        <div className="flex items-center justify-center mb-8">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center text-primary">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center bg-primary text-white">
+                1
+              </div>
+              <span className="ml-2">Country</span>
+            </div>
+            <div className="w-8 h-1 bg-muted"></div>
+            <div className="flex items-center text-muted-foreground">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center bg-muted">
+                2
+              </div>
+              <span className="ml-2">Service</span>
+            </div>
+            <div className="w-8 h-1 bg-muted"></div>
+            <div className="flex items-center text-muted-foreground">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center bg-muted">
+                3
+              </div>
+              <span className="ml-2">Number</span>
+            </div>
+            <div className="w-8 h-1 bg-muted"></div>
+            <div className="flex items-center text-muted-foreground">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center bg-muted">
+                4
+              </div>
+              <span className="ml-2">Code</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Step 1: Country Selection */}
+        {step === 'countries' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Phone className="mr-2 h-5 w-5" />
+                Select Country
+              </CardTitle>
+              <CardDescription>Choose a country to get a phone number from</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* Search Input */}
+              <div className="relative mb-6">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Search countries by name or code..."
+                  value={countrySearch}
+                  onChange={(e) => setCountrySearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              
+              {loadingCountries ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                  Loading countries...
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredCountries.map((country) => (
+                    <Card 
+                      key={country.id} 
+                      className="cursor-pointer hover:shadow-md transition-shadow"
+                      onClick={() => handleCountrySelect(country.id)}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold">{country.name}</h3>
+                            <p className="text-sm text-muted-foreground">{country.code}</p>
+                          </div>
+                          <Badge variant="outline">{country.code}</Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+              
+              {!loadingCountries && filteredCountries.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  {countrySearch ? 'No countries found matching your search.' : 'No countries available.'}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     );
   }

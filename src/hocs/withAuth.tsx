@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/router';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getCurrentUser } from '@/lib/auth';
 
 export function withAuth(Component: React.ComponentType) {
   return function WithAuth(props: any) {
-    const router = useRouter();
+    const navigate = useNavigate();
+    const location = useLocation();
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
@@ -13,19 +14,19 @@ export function withAuth(Component: React.ComponentType) {
           const user = await getCurrentUser();
           if (!user) {
             // Store the intended URL to redirect after login
-            const redirectUrl = router.asPath;
-            router.push(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
+            const redirectUrl = location.pathname + location.search;
+            navigate(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
           } else {
             setIsLoading(false);
           }
         } catch (error) {
           console.error('Auth check failed:', error);
-          router.push('/login');
+          navigate('/login');
         }
       };
 
       checkAuth();
-    }, [router]);
+    }, [navigate, location]);
 
     if (isLoading) {
       return (

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { supabase } from './supabaseClient';
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api',
@@ -13,12 +14,17 @@ const apiClient = axios.create({
 // Log the base URL being used
 console.log('API Base URL:', import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api');
 
-apiClient.interceptors.request.use((config) => {
-  // Add auth token here if stored in localStorage or cookies
-  const token = localStorage.getItem('auth_token');
-  if (token && config.headers) {
-    config.headers.Authorization = `Bearer ${token}`;
+apiClient.interceptors.request.use(async (config) => {
+  try {
+    // Get the current session from Supabase client
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token && config.headers) {
+      config.headers.Authorization = `Bearer ${session.access_token}`;
+    }
+  } catch (error) {
+    console.error('Error getting session:', error);
   }
+  
   return config;
 });
 
