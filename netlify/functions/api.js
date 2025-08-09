@@ -334,7 +334,7 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Account balance endpoint (requires authentication)
+    // Account balance endpoint (requires authentication) - Now with real balance!
     if (endpoint === 'account-balance' && httpMethod === 'GET') {
       try {
         // Check for authorization header
@@ -347,12 +347,48 @@ exports.handler = async (event, context) => {
           };
         }
 
-        // For now, return a default balance since we don't have full JWT verification
-        // In a complete implementation, you'd verify the JWT and get user ID
+        const token = authHeader.split(' ')[1];
+        
+        // Verify token with Supabase and get user
+        const { data: userData, error: userError } = await supabase.auth.getUser(token);
+        if (userError || !userData.user) {
+          return {
+            statusCode: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Invalid authentication token' })
+          };
+        }
+
+        const userId = userData.user.id;
+        
+        // Fetch user balance from database
+        const { data: balanceData, error: balanceError } = await supabase
+          .from('user_balances')
+          .select('balance, currency')
+          .eq('user_id', userId)
+          .eq('currency', 'USD')
+          .single();
+
+        if (balanceError && balanceError.code !== 'PGRST116') { // PGRST116 = no rows found
+          console.error('Error fetching balance:', balanceError);
+          return {
+            statusCode: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Failed to fetch balance' })
+          };
+        }
+
+        // If no balance record exists, user has $0
+        const balance = balanceData ? parseFloat(balanceData.balance) : 0;
+
         return {
           statusCode: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ balance: 0 })
+          body: JSON.stringify({ 
+            balance: balance,
+            currency: 'USD',
+            userId: userId
+          })
         };
       } catch (error) {
         console.error('Error getting account balance:', error);
@@ -506,28 +542,92 @@ exports.handler = async (event, context) => {
       }
     }
 
-    // Payment status check endpoint
+    // Payment status check endpoint - Now with real balance crediting!
     if (pathParts[0] === 'add-funds' && pathParts[1] === 'status' && pathParts[2] && httpMethod === 'GET') {
       try {
         const reference = pathParts[2];
         console.log('Checking payment status for reference:', reference);
         
-        // Mock payment status response
-        // In a real implementation, this would check with Campay API
-        const statuses = ['pending', 'completed', 'failed'];
-        const mockStatus = 'completed'; // For demo, always return completed
+        // Extract user token from Authorization header
+        const authHeader = event.headers.authorization || event.headers.Authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return {
+            statusCode: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Authentication required' })
+          };
+        }
+
+        const token = authHeader.split(' ')[1];
         
-        return {
-          statusCode: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            reference: reference,
-            status: mockStatus,
-            message: mockStatus === 'completed' ? 'Payment completed successfully' : 
-                    mockStatus === 'pending' ? 'Payment is being processed' : 'Payment failed',
-            timestamp: new Date().toISOString()
-          })
-        };
+        // Verify token with Supabase
+        const { data: userData, error: userError } = await supabase.auth.getUser(token);
+        if (userError || !userData.user) {
+          return {
+            statusCode: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Invalid authentication token' })
+          };
+        }
+
+        const userId = userData.user.id;
+        
+        // Mock payment completion - In real implementation, check with Campay API
+        const mockStatus = 'completed'; // Always simulate successful payment
+        
+        if (mockStatus === 'completed') {
+          // In a real implementation, we'd fetch payment details from database using reference
+          // For now, we'll look up the payment in payment_transactions table by checking recent transactions
+          // or use a default amount. For demo purposes, let's use a consistent $10 USD
+          const amountUSD = 10; // Default amount for demo - in real implementation, fetch from database
+          
+          console.log(`Crediting ${amountUSD} USD to user ${userId} for payment ${reference}`);
+          
+          // Credit user balance using Supabase function
+          const { data: creditResult, error: creditError } = await supabase
+            .rpc('credit_user_balance', {
+              p_user_id: userId,
+              p_amount: amountUSD,
+              p_currency: 'USD'
+            });
+
+          if (creditError) {
+            console.error('Error crediting balance:', creditError);
+            return {
+              statusCode: 500,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ error: 'Failed to credit balance' })
+            };
+          }
+
+          const creditInfo = creditResult && creditResult.length > 0 ? creditResult[0] : null;
+          console.log('Balance credited successfully:', creditInfo);
+
+          return {
+            statusCode: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              reference: reference,
+              status: 'completed',
+              message: `Payment completed! $${amountUSD} USD has been added to your account.`,
+              timestamp: new Date().toISOString(),
+              amountCredited: amountUSD,
+              currency: 'USD',
+              newBalance: creditInfo ? creditInfo.new_balance : null
+            })
+          };
+        } else {
+          return {
+            statusCode: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              reference: reference,
+              status: mockStatus,
+              message: mockStatus === 'pending' ? 'Payment is being processed' : 'Payment failed',
+              timestamp: new Date().toISOString()
+            })
+          };
+        }
       } catch (error) {
         console.error('Payment status check error:', error);
         return {
