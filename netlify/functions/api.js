@@ -124,6 +124,182 @@ exports.handler = async (event, context) => {
       };
     }
 
+    // Countries endpoint
+    if (endpoint === 'countries' && httpMethod === 'GET') {
+      // Return fallback countries (same as backend)
+      const fallbackCountries = [
+        { id: '0', name: 'Russia', code: '+7' },
+        { id: '1', name: 'Ukraine', code: '+380' },
+        { id: '2', name: 'Kazakhstan', code: '+7' },
+        { id: '3', name: 'China', code: '+86' },
+        { id: '4', name: 'Philippines', code: '+63' },
+        { id: '5', name: 'Myanmar', code: '+95' },
+        { id: '6', name: 'Indonesia', code: '+62' },
+        { id: '7', name: 'Malaysia', code: '+60' },
+        { id: '8', name: 'Kenya', code: '+254' },
+        { id: '9', name: 'Tanzania', code: '+255' },
+        { id: '10', name: 'Vietnam', code: '+84' },
+        { id: '11', name: 'Kyrgyzstan', code: '+996' },
+        { id: '12', name: 'USA (Virtual)', code: '+1' },
+        { id: '13', name: 'Israel', code: '+972' },
+        { id: '14', name: 'Hong Kong (China)', code: '+852' },
+        { id: '15', name: 'Poland', code: '+48' },
+        { id: '16', name: 'England (UK)', code: '+44' },
+        { id: '17', name: 'Madagascar', code: '+261' },
+        { id: '18', name: 'Congo', code: '+242' },
+        { id: '19', name: 'Nigeria', code: '+234' },
+        { id: '20', name: 'Macau', code: '+853' },
+        { id: '21', name: 'Egypt', code: '+20' },
+        { id: '22', name: 'India', code: '+91' },
+        { id: '23', name: 'Ireland', code: '+353' },
+        { id: '24', name: 'Cambodia', code: '+855' },
+        { id: '25', name: 'Laos', code: '+856' },
+        { id: '26', name: 'Haiti', code: '+509' },
+        { id: '27', name: 'Ivory Coast', code: '+225' },
+        { id: '28', name: 'Gambia', code: '+220' },
+        { id: '29', name: 'Serbia', code: '+381' },
+        { id: '30', name: 'Yemen', code: '+967' },
+        { id: '31', name: 'South Africa', code: '+27' },
+        { id: '32', name: 'Romania', code: '+40' },
+        { id: '33', name: 'Colombia', code: '+57' },
+        { id: '34', name: 'Estonia', code: '+372' },
+        { id: '35', name: 'Canada', code: '+1' },
+        { id: '36', name: 'Morocco', code: '+212' },
+        { id: '37', name: 'Ghana', code: '+233' },
+        { id: '38', name: 'Argentina', code: '+54' },
+        { id: '39', name: 'Uzbekistan', code: '+998' },
+        { id: '40', name: 'Cameroon', code: '+237' },
+        { id: '41', name: 'Chad', code: '+235' },
+        { id: '42', name: 'Germany', code: '+49' },
+        { id: '43', name: 'Lithuania', code: '+370' },
+        { id: '44', name: 'Croatia', code: '+385' },
+        { id: '45', name: 'Sweden', code: '+46' },
+        { id: '46', name: 'Iraq', code: '+964' },
+        { id: '47', name: 'Netherlands', code: '+31' },
+        { id: '48', name: 'Latvia', code: '+371' },
+        { id: '49', name: 'Austria', code: '+43' },
+        { id: '50', name: 'Belarus', code: '+375' },
+        { id: '51', name: 'Thailand', code: '+66' },
+        { id: '52', name: 'Saudi Arabia', code: '+966' },
+        { id: '53', name: 'Mexico', code: '+52' },
+        { id: '54', name: 'Taiwan', code: '+886' },
+        { id: '55', name: 'Spain', code: '+34' },
+        { id: '56', name: 'Iran', code: '+98' },
+        { id: '57', name: 'Algeria', code: '+213' },
+        { id: '58', name: 'Slovenia', code: '+386' },
+        { id: '59', name: 'Bangladesh', code: '+880' },
+        { id: '60', name: 'Senegal', code: '+221' },
+        { id: '61', name: 'Turkey', code: '+90' },
+        { id: '62', name: 'Czech Republic', code: '+420' },
+        { id: '63', name: 'Sri Lanka', code: '+94' },
+        { id: '64', name: 'Peru', code: '+51' },
+        { id: '65', name: 'New Zealand', code: '+64' },
+        { id: '66', name: 'Guinea', code: '+224' },
+        { id: '67', name: 'Mali', code: '+223' },
+        { id: '68', name: 'Venezuela', code: '+58' },
+        { id: '69', name: 'Ethiopia', code: '+251' },
+        { id: '70', name: 'Mongolia', code: '+976' },
+        { id: '71', name: 'Brazil', code: '+55' },
+        { id: '72', name: 'Afghanistan', code: '+93' },
+        { id: '73', name: 'Uganda', code: '+256' },
+        { id: '74', name: 'Angola', code: '+244' },
+        { id: '75', name: 'Cyprus', code: '+357' },
+        { id: '76', name: 'France', code: '+33' },
+        { id: '77', name: 'Papua New Guinea', code: '+675' },
+        { id: '78', name: 'Mozambique', code: '+258' },
+        { id: '79', name: 'Nepal', code: '+977' },
+        { id: '80', name: 'Belgium', code: '+32' },
+        { id: '81', name: 'Bulgaria', code: '+359' },
+        { id: '82', name: 'Hungary', code: '+36' },
+        { id: '83', name: 'Moldova', code: '+373' },
+        { id: '84', name: 'Italy', code: '+39' },
+        { id: '85', name: 'Paraguay', code: '+595' },
+        { id: '86', name: 'Honduras', code: '+504' },
+        { id: '87', name: 'Tunisia', code: '+216' },
+        { id: '88', name: 'Nicaragua', code: '+505' },
+        { id: '89', name: 'Timor-Leste', code: '+670' },
+        { id: '90', name: 'Bolivia', code: '+591' },
+        { id: '91', name: 'Costa Rica', code: '+506' },
+        { id: '92', name: 'Guatemala', code: '+502' },
+        { id: '93', name: 'United Arab Emirates', code: '+971' },
+        { id: '94', name: 'Zimbabwe', code: '+263' },
+        { id: '95', name: 'Puerto Rico', code: '+1' },
+        { id: '96', name: 'Sudan', code: '+249' },
+        { id: '97', name: 'Togo', code: '+228' },
+        { id: '98', name: 'Kuwait', code: '+965' },
+        { id: '99', name: 'Salvador', code: '+503' },
+        { id: '100', name: 'Libya', code: '+218' },
+        { id: '101', name: 'Jamaica', code: '+1' },
+        { id: '102', name: 'Trinidad and Tobago', code: '+1' },
+        { id: '103', name: 'Ecuador', code: '+593' },
+        { id: '104', name: 'Swaziland', code: '+268' },
+        { id: '105', name: 'Oman', code: '+968' },
+        { id: '106', name: 'Bosnia and Herzegovina', code: '+387' },
+        { id: '107', name: 'Dominican Republic', code: '+1' },
+        { id: '108', name: 'Finland', code: '+358' },
+        { id: '109', name: 'Namibia', code: '+264' },
+        { id: '110', name: 'Lesotho', code: '+266' },
+        { id: '111', name: 'Denmark', code: '+45' },
+        { id: '112', name: 'Norway', code: '+47' },
+        { id: '113', name: 'Luxembourg', code: '+352' },
+        { id: '114', name: 'Jordan', code: '+962' },
+        { id: '115', name: 'Australia', code: '+61' },
+        { id: '116', name: 'Lebanon', code: '+961' },
+        { id: '117', name: 'Portugal', code: '+351' },
+        { id: '118', name: 'Liberia', code: '+231' },
+        { id: '119', name: 'Uruguay', code: '+598' },
+        { id: '120', name: 'Panama', code: '+507' },
+        { id: '121', name: 'Montenegro', code: '+382' },
+        { id: '122', name: 'Burkina Faso', code: '+226' },
+        { id: '123', name: 'Niger', code: '+227' },
+        { id: '124', name: 'Madagascar', code: '+261' },
+        { id: '125', name: 'Benin', code: '+229' },
+        { id: '126', name: 'Mauritania', code: '+222' },
+        { id: '127', name: 'Rwanda', code: '+250' },
+        { id: '128', name: 'Guinea-Bissau', code: '+245' },
+        { id: '129', name: 'Comoros', code: '+269' },
+        { id: '130', name: 'Djibouti', code: '+253' },
+        { id: '131', name: 'Equatorial Guinea', code: '+240' },
+        { id: '132', name: 'Gabon', code: '+241' }
+      ];
+
+      return {
+        statusCode: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify(fallbackCountries)
+      };
+    }
+
+    // Account balance endpoint (requires authentication)
+    if (endpoint === 'account-balance' && httpMethod === 'GET') {
+      try {
+        // Check for authorization header
+        const authHeader = headers.authorization || headers.Authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return {
+            statusCode: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Authentication required' })
+          };
+        }
+
+        // For now, return a default balance since we don't have full JWT verification
+        // In a complete implementation, you'd verify the JWT and get user ID
+        return {
+          statusCode: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ balance: 0 })
+        };
+      } catch (error) {
+        console.error('Error getting account balance:', error);
+        return {
+          statusCode: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Failed to get account balance' })
+        };
+      }
+    }
+
     // Authentication endpoints
     if (pathParts[0] === 'auth') {
       const authEndpoint = pathParts[1];
