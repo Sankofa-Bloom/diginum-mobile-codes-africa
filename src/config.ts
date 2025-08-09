@@ -3,7 +3,7 @@
 
 // API configuration
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
-  (import.meta.env.PROD ? 'https://diginum.vercel.app/api' : 'http://localhost:4000/api');
+  (import.meta.env.PROD ? '/.netlify/functions/api' : 'http://localhost:4000/api');
 
 // Supabase configuration (public keys only)
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;

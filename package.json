@@ -11,8 +11,9 @@
     "preview": "vite preview",
     "build:backend": "node backend/build.js",
     "vercel-build": "npm run build && npm run build:backend",
+    "netlify-build": "npm run build",
     "start": "node .output/index.js",
-    "postinstall": "cd backend && npm install"
+    "postinstall": "cd backend && npm install && cd ../netlify/functions && npm install"
   },
   "engines": {
     "node": ">=16.0.0"
