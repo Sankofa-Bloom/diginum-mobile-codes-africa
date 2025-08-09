@@ -1,7 +1,7 @@
 // DigiNum Frontend Configuration
 // Only safe, public configurations that can be exposed to the browser
 
-// API configuration
+// API configuration - Use direct Netlify Functions URL for production
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
   (import.meta.env.PROD ? '/.netlify/functions/api' : 'http://localhost:4000/api');
 
