@@ -63,6 +63,14 @@ const fallbackRates = [
 exports.handler = async (event, context) => {
   const { httpMethod, path, queryStringParameters, headers, body } = event;
   
+  console.log('Netlify Function Event:', { 
+    httpMethod, 
+    path, 
+    rawPath: event.rawPath,
+    params: event.pathParameters,
+    multiValueParams: event.multiValueQueryStringParameters 
+  });
+  
   // Handle CORS preflight
   if (httpMethod === 'OPTIONS') {
     return {
@@ -74,13 +82,37 @@ exports.handler = async (event, context) => {
 
   try {
     const requestBody = parseBody(body, headers['content-type']);
-    // In Netlify Functions, path is like '/.netlify/functions/api/health'
-    // We need to extract everything after the function name
-    const pathAfterFunction = path.replace('/.netlify/functions/api', '') || '/';
-    const pathParts = pathAfterFunction.startsWith('/') ? pathAfterFunction.substring(1).split('/') : pathAfterFunction.split('/');
-    const endpoint = pathParts[0];
+    
+    // Handle different scenarios:
+    // 1. Direct: /.netlify/functions/api/health  
+    // 2. Redirected: /.netlify/functions/api with splat in pathParameters
+    // 3. Manual call: /.netlify/functions/api
+    
+    let pathAfterFunction = '';
+    
+    // Check if this is a redirected call with splat parameter
+    if (event.pathParameters && event.pathParameters.splat) {
+      pathAfterFunction = '/' + event.pathParameters.splat;
+    } else {
+      // Direct call - extract path after function name
+      pathAfterFunction = path.replace('/.netlify/functions/api', '') || '/';
+    }
+    
+    // Ensure it starts with /
+    if (!pathAfterFunction.startsWith('/')) {
+      pathAfterFunction = '/' + pathAfterFunction;
+    }
+    
+    const pathParts = pathAfterFunction.substring(1).split('/').filter(p => p);
+    const endpoint = pathParts[0] || '';
 
-    console.log(`API Request: ${httpMethod} ${path}`, { pathAfterFunction, endpoint, pathParts });
+    console.log(`API Request: ${httpMethod} ${path}`, { 
+      pathAfterFunction, 
+      endpoint, 
+      pathParts, 
+      splat: event.pathParameters?.splat,
+      isRedirected: !!event.pathParameters?.splat
+    });
 
     // Exchange rates endpoint
     if (endpoint === 'exchange-rates' && httpMethod === 'GET') {

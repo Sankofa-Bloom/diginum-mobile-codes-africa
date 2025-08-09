@@ -31,3 +31,6 @@ dist-ssr
 .vercel
 
 .output/
+
+# Local Netlify folder
+.netlify
