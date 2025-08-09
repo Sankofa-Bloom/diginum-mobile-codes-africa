@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { supabase } from './supabaseClient';
+import { API_BASE_URL } from '../config';
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api',
+  baseURL: API_BASE_URL,
   timeout: 30000,
   withCredentials: true,
   headers: {
@@ -12,7 +13,7 @@ const apiClient = axios.create({
 });
 
 // Log the base URL being used
-console.log('API Base URL:', import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api');
+console.log('API Base URL:', API_BASE_URL);
 
 apiClient.interceptors.request.use(async (config) => {
   try {
