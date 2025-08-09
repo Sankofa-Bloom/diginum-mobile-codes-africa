@@ -506,6 +506,38 @@ exports.handler = async (event, context) => {
       }
     }
 
+    // Payment status check endpoint
+    if (pathParts[0] === 'add-funds' && pathParts[1] === 'status' && pathParts[2] && httpMethod === 'GET') {
+      try {
+        const reference = pathParts[2];
+        console.log('Checking payment status for reference:', reference);
+        
+        // Mock payment status response
+        // In a real implementation, this would check with Campay API
+        const statuses = ['pending', 'completed', 'failed'];
+        const mockStatus = 'completed'; // For demo, always return completed
+        
+        return {
+          statusCode: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reference: reference,
+            status: mockStatus,
+            message: mockStatus === 'completed' ? 'Payment completed successfully' : 
+                    mockStatus === 'pending' ? 'Payment is being processed' : 'Payment failed',
+            timestamp: new Date().toISOString()
+          })
+        };
+      } catch (error) {
+        console.error('Payment status check error:', error);
+        return {
+          statusCode: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Failed to check payment status' })
+        };
+      }
+    }
+
     // Health check - handle both empty path and /health
     if ((endpoint === 'health' || endpoint === '' || pathAfterFunction === '/') && httpMethod === 'GET') {
       return {
