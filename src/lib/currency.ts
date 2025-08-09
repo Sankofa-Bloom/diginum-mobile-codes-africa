@@ -298,7 +298,7 @@ export class CurrencyService {
 
       if (error) {
         console.error('Error saving payment transaction:', error);
-        throw error;
+        throw new Error(`Database error: ${error.message || 'Failed to save transaction'}`);
       }
     } catch (error) {
       console.error('Error saving payment transaction:', error);

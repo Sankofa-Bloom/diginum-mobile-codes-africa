@@ -80,14 +80,27 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
 
     setIsLoading(true);
     try {
-      // Save transaction to database
-      await CurrencyService.savePaymentTransaction(
-        conversion.originalAmount,
-        conversion.finalAmount,
-        conversion.currency,
-        conversion.rate,
-        conversion.fxBuffer
-      );
+      // Try to save transaction to database (non-blocking)
+      try {
+        await CurrencyService.savePaymentTransaction(
+          conversion.originalAmount,
+          conversion.finalAmount,
+          conversion.currency,
+          conversion.rate,
+          conversion.fxBuffer
+        );
+        console.log('Payment transaction saved successfully');
+      } catch (dbError: any) {
+        console.warn('Failed to save transaction to database (continuing with payment):', dbError);
+        // Don't block payment if database save fails
+      }
+
+      console.log('Initiating payment with data:', {
+        amount: conversion.finalAmount,
+        currency: conversion.currency,
+        phoneNumber: phoneNumber,
+        originalAmountUSD: conversion.originalAmount
+      });
 
       const response = await apiClient.post('/add-funds/campay', {
         amount: conversion.finalAmount, // Send converted amount with FX buffer
@@ -96,20 +109,30 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
         originalAmountUSD: conversion.originalAmount // Include original USD amount for reference
       });
 
-      if (response.data?.success) {
-        setPaymentReference(response.data.reference);
+      console.log('Payment API response:', response);
+
+      if (response?.success || response?.data?.success) {
+        const reference = response.reference || response.data?.reference;
+        setPaymentReference(reference);
         setIsProcessingPayment(true);
         
         toast.success('Payment initiated! Please complete the payment on your mobile money app.');
         
         // Start polling for payment status
-        pollPaymentStatus(response.data.reference);
+        pollPaymentStatus(reference);
       } else {
-        toast.error('Failed to initiate payment');
+        console.error('Payment initiation failed - invalid response:', response);
+        toast.error('Failed to initiate payment - invalid response from server');
       }
     } catch (error: any) {
       console.error('Error adding funds:', error);
-      toast.error(error.message || 'Failed to add funds');
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: error.config
+      });
+      toast.error(error.response?.data?.error || error.message || 'Failed to add funds');
     } finally {
       setIsLoading(false);
     }
