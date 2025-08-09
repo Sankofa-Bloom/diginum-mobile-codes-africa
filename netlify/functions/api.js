@@ -467,6 +467,45 @@ exports.handler = async (event, context) => {
       }
     }
 
+    // Add funds endpoint (for mobile money payments)
+    if (pathParts[0] === 'add-funds' && pathParts[1] === 'campay' && httpMethod === 'POST') {
+      try {
+        const { amount, currency, phoneNumber, originalAmountUSD } = requestBody;
+
+        if (!amount || !currency || !phoneNumber) {
+          return {
+            statusCode: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Amount, currency, and phone number are required' })
+          };
+        }
+
+        // For now, simulate a successful payment initiation
+        // In a real implementation, this would integrate with Campay API
+        const mockReference = `PAY_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        return {
+          statusCode: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: true,
+            reference: mockReference,
+            message: 'Payment initiated successfully',
+            amount: amount,
+            currency: currency,
+            phoneNumber: phoneNumber
+          })
+        };
+      } catch (error) {
+        console.error('Add funds error:', error);
+        return {
+          statusCode: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Failed to process payment' })
+        };
+      }
+    }
+
     // Health check - handle both empty path and /health
     if ((endpoint === 'health' || endpoint === '' || pathAfterFunction === '/') && httpMethod === 'GET') {
       return {

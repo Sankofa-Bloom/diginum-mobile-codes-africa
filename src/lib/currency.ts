@@ -276,25 +276,33 @@ export class CurrencyService {
     userId?: string
   ): Promise<void> {
     try {
+      // Get current user if userId not provided
+      let currentUserId = userId;
+      if (!currentUserId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        currentUserId = user?.id;
+      }
+
       const { error } = await supabase
         .from('payment_transactions')
         .insert([
           {
-            user_id: userId,
+            user_id: currentUserId,
             original_amount_usd: originalAmount,
             converted_amount: convertedAmount,
             currency: currency,
             exchange_rate: rate,
-            fx_buffer: fxBuffer,
-            created_at: new Date().toISOString()
+            fx_buffer: fxBuffer
           }
         ]);
 
       if (error) {
         console.error('Error saving payment transaction:', error);
+        throw error;
       }
     } catch (error) {
       console.error('Error saving payment transaction:', error);
+      throw error;
     }
   }
 
