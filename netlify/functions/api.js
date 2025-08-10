@@ -360,12 +360,14 @@ exports.handler = async (event, context) => {
         }
 
         const userId = userData.user.id;
+        console.log('Account balance lookup for user:', userId);
         
         // Fetch user balance from database (with fallback for missing table)
         let balance = 0;
         let balanceError = null;
         
         try {
+          console.log('Querying user_balances table...');
           const { data: balanceData, error: dbError } = await supabase
             .from('user_balances')
             .select('balance, currency')
@@ -373,17 +375,25 @@ exports.handler = async (event, context) => {
             .eq('currency', 'USD')
             .single();
 
+          console.log('Database query result:', { balanceData, dbError });
+
           if (dbError && dbError.code !== 'PGRST116') { // PGRST116 = no rows found
-            console.warn('Database table might not exist yet:', dbError);
+            console.warn('Database error (not no-rows):', dbError);
             balanceError = dbError;
+          } else if (dbError && dbError.code === 'PGRST116') {
+            console.log('No balance record found for user - defaulting to $0');
+            balance = 0;
           } else {
             // If no balance record exists, user has $0
             balance = balanceData ? parseFloat(balanceData.balance) : 0;
+            console.log('Balance found in database:', balance);
           }
         } catch (error) {
           console.warn('Balance lookup failed, using default balance:', error);
           balance = 0; // Default to $0 if table doesn't exist yet
         }
+        
+        console.log('Final balance to return:', balance);
 
         return {
           statusCode: 200,

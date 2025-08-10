@@ -128,15 +128,39 @@ const BuyPage = () => {
   const loadAccountBalance = async () => {
     setLoadingBalance(true);
     try {
+      console.log('Loading account balance...');
       const response = await apiClient.get('/account-balance');
       console.log('Balance API response:', response);
-      // Handle both response.data.balance and response.balance for compatibility
-      const balance = response.data?.balance !== undefined ? response.data.balance : response.balance;
-      setAccountBalance(balance || 0);
-      console.log('Account balance loaded:', balance);
+      console.log('Full response object:', JSON.stringify(response, null, 2));
+      
+      // Handle multiple response formats
+      let balance = 0;
+      if (response.data?.balance !== undefined) {
+        balance = response.data.balance;
+        console.log('Found balance in response.data.balance:', balance);
+      } else if (response.balance !== undefined) {
+        balance = response.balance;
+        console.log('Found balance in response.balance:', balance);
+      } else if (typeof response === 'object' && response.balance !== undefined) {
+        balance = response.balance;
+        console.log('Found balance in direct response:', balance);
+      }
+      console.log('Final parsed balance:', balance);
+      
+      const finalBalance = parseFloat(balance) || 0;
+      setAccountBalance(finalBalance);
+      console.log('Account balance loaded and set:', finalBalance);
+      
+      if (finalBalance > 0) {
+        console.log('✅ Balance loaded successfully: $' + finalBalance);
+      } else {
+        console.warn('⚠️ Balance is $0 - check database setup');
+      }
     } catch (error: any) {
-      console.error('Error loading account balance:', error);
-      toast.error('Failed to load account balance');
+      console.error('❌ Error loading account balance:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      toast.error('Failed to load account balance: ' + (error.response?.data?.error || error.message));
       setAccountBalance(0); // Default to $0 on error
     } finally {
       setLoadingBalance(false);
@@ -432,7 +456,19 @@ const BuyPage = () => {
             {loadingBalance ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <span className="text-lg font-bold text-primary">${accountBalance.toFixed(2)}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-bold text-primary">${accountBalance.toFixed(2)}</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={loadAccountBalance}
+                  className="h-6 w-6 p-0"
+                  disabled={loadingBalance}
+                  title="Refresh balance"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                </Button>
+              </div>
             )}
           </div>
           <AddFundsModal 
