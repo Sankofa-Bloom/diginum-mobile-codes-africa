@@ -1,7 +1,7 @@
 {
   "name": "diginum",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -26,7 +26,10 @@
   "engines": {
     "node": ">=16.0.0"
   },
-  "cacheDirectories": ["node_modules", "backend/node_modules"],
+  "cacheDirectories": [
+    "node_modules",
+    "backend/node_modules"
+  ],
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",
