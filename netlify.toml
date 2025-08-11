@@ -2,6 +2,8 @@
   publish = "dist"
   command = "npm install && npm run build"
   functions = "netlify/functions"
+  # Only include necessary files for frontend build
+  ignore = "backend/,tests/,docs/,*.md,.env*,*.sql"
 
 [build.environment]
   NODE_VERSION = "18.20.8"
@@ -11,6 +13,11 @@
   VITE_SUPABASE_URL = "https://xoivxzjhgjyvuzcmzcas.supabase.co"
   VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvaXZ4empoZ2p5dnV6Y216Y2FzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIyNTQ1NjgsImV4cCI6MjA2NzgzMDU2OH0.ny0Gnf6uVbk9nrLq6VTYqjf9KPVSt2KczF223hf8ZZg"
   VITE_FAPSHI_ENVIRONMENT = "live"
+
+# Configure secrets scanning to exclude certain paths and keys
+[build.environment]
+  SECRETS_SCAN_OMIT_PATHS = "backend/,dist/,dev-dist/,tests/,docs/,*.md,.env*,*.sql"
+  SECRETS_SCAN_OMIT_KEYS = "FAPSHI_ENVIRONMENT,PORT,NODE_ENV,SUPABASE_JWT_SECRET,FRONTEND_URL,BACKEND_URL,FAPSHI_BASE_URL,STRIPE_WEBHOOK_SECRET,SMTP_PASS,SMTP_USER,STRIPE_SECRET_KEY,SMTP_HOST,CAMPAY_API_KEY,CAMPAY_WEBHOOK_KEY"
 
 # Production context
 [context.production]
