@@ -96,7 +96,8 @@
     "vite": "^5.4.1",
     "vite-plugin-pwa": "^1.0.1",
     "winston": "^3.17.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "lovable-tagger": "^1.1.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
@@ -112,7 +113,6 @@
     "framer-motion": "^12.23.6",
     "globals": "^15.9.0",
     "locomotive-scroll": "^4.1.4",
-    "lovable-tagger": "^1.1.7",
     "typescript-eslint": "^8.0.1"
   }
 }
