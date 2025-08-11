@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, CreditCard, Smartphone, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { fapshiAPI, formatFapshiAmount, isFapshiSupported } from '@/lib/fapshi';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 interface FapshiPaymentProps {
   amount: number;
@@ -14,8 +15,6 @@ interface FapshiPaymentProps {
   onSuccess?: (paymentData: any) => void;
   onError?: (error: string) => void;
   onCancel?: () => void;
-  userEmail?: string;
-  userName?: string;
   description?: string;
 }
 
@@ -25,17 +24,31 @@ export default function FapshiPayment({
   onSuccess,
   onError,
   onCancel,
-  userEmail = '',
-  userName = '',
   description = 'DigiNum SMS Service Payment'
 }: FapshiPaymentProps) {
+  const { user } = useCurrentUser();
   const [isLoading, setIsLoading] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
   const [formData, setFormData] = useState({
-    email: userEmail,
-    name: userName,
     phone: '',
   });
+
+  // Check if user is logged in
+  if (!user) {
+    return (
+      <Card className="w-full max-w-md mx-auto">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <XCircle className="h-5 w-5 text-red-500" />
+            Authentication Required
+          </CardTitle>
+          <CardDescription>
+            Please log in to your account to make a payment.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
   // Check if Fapshi supports the currency
   if (!isFapshiSupported(currency)) {
@@ -62,14 +75,8 @@ export default function FapshiPayment({
   };
 
   const validateForm = () => {
-    if (!formData.email || !formData.name) {
-      toast.error('Please fill in all required fields');
-      return false;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      toast.error('Please enter a valid email address');
+    if (!user?.email) {
+      toast.error('Please log in to make a payment');
       return false;
     }
 
@@ -86,8 +93,8 @@ export default function FapshiPayment({
       const paymentData = {
         amount: amount,
         currency: currency as 'XAF',
-        email: formData.email,
-        name: formData.name,
+        email: user.email,
+        name: user.user_metadata?.full_name || user.email.split('@')[0], // Use user's name or email prefix
         phone: formData.phone,
         description: description,
         redirectUrl: `${window.location.origin}/payment/success`,
@@ -158,34 +165,21 @@ export default function FapshiPayment({
 
         {/* Payment Form */}
         <div className="space-y-3">
-          <div>
-            <Label htmlFor="email">Email Address *</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="your.email@example.com"
-              value={formData.email}
-              onChange={(e) => handleInputChange('email', e.target.value)}
-              disabled={isLoading}
-              required
-            />
-          </div>
+          {/* User Info Display */}
+          {user && (
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <div className="text-sm text-blue-800">
+                <div className="font-medium">Payment Details</div>
+                <div className="text-xs text-blue-600 mt-1">
+                  Email: {user.email}
+                  {user.user_metadata?.full_name && ` • Name: ${user.user_metadata.full_name}`}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div>
-            <Label htmlFor="name">Full Name *</Label>
-            <Input
-              id="name"
-              type="text"
-              placeholder="John Doe"
-              value={formData.name}
-              onChange={(e) => handleInputChange('name', e.target.value)}
-              disabled={isLoading}
-              required
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="phone">Phone Number (Optional)</Label>
+            <Label htmlFor="phone">Mobile Money Number *</Label>
             <Input
               id="phone"
               type="tel"
@@ -193,7 +187,11 @@ export default function FapshiPayment({
               value={formData.phone}
               onChange={(e) => handleInputChange('phone', e.target.value)}
               disabled={isLoading}
+              required
             />
+            <div className="text-xs text-gray-500 mt-1">
+              Enter your MTN Mobile Money or Orange Money number
+            </div>
           </div>
         </div>
 
@@ -216,7 +214,7 @@ export default function FapshiPayment({
         <div className="space-y-2">
           <Button
             onClick={handlePayment}
-            disabled={isLoading || paymentStatus === 'success'}
+            disabled={isLoading || paymentStatus === 'success' || !user}
             className="w-full"
             size="lg"
           >
@@ -224,6 +222,11 @@ export default function FapshiPayment({
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Processing...
+              </>
+            ) : !user ? (
+              <>
+                <XCircle className="mr-2 h-4 w-4" />
+                Login Required
               </>
             ) : (
               <>

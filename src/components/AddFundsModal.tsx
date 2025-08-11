@@ -3,13 +3,14 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, DollarSign, CreditCard, Globe, Calculator, Phone, AlertCircle, Smartphone } from 'lucide-react';
+import { Loader2, DollarSign, CreditCard, Globe, Calculator, AlertCircle, Smartphone, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '@/lib/apiClient';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { CurrencyService } from '@/lib/currency';
 import FapshiPayment from '@/components/FapshiPayment';
 import { isFapshiSupported } from '@/lib/fapshi';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 interface AddFundsModalProps {
   currentBalance: number;
@@ -23,9 +24,9 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
   trigger 
 }) => {
   const { userCurrency, setUserCurrency, convertUSDToLocal, formatPrice } = useCurrency();
+  const { user } = useCurrentUser();
   const [isOpen, setIsOpen] = useState(false);
   const [amount, setAmount] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'traditional' | 'fapshi'>('fapshi');
@@ -68,8 +69,8 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
       return;
     }
 
-    if (!phoneNumber.trim()) {
-      toast.error('Please enter your phone number');
+    if (!user?.email) {
+      toast.error('Please log in to add funds');
       return;
     }
 
@@ -109,7 +110,7 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
       const response = await apiClient.post('/add-funds/campay', {
         amount: conversion.finalAmount, // Send converted amount with FX buffer
         currency: conversion.currency, // Send local currency
-        phoneNumber: phoneNumber,
+        phoneNumber: user.phone_number || '', // Use user's phone number if available
         originalAmountUSD: conversion.originalAmount // Include original USD amount for reference
       });
 
@@ -219,7 +220,6 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
 
   const resetForm = () => {
     setAmount('');
-    setPhoneNumber('');
     setConversion(null);
     setPaymentReference('');
     setIsProcessingPayment(false);
@@ -342,22 +342,31 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
             </div>
           )}
 
-          {/* Phone Number Input */}
-          <div>
-              <Label htmlFor="phoneNumber" className="flex items-center gap-2">
-                <Phone className="h-4 w-4" />
-                Phone Number
-              </Label>
-              <Input
-                id="phoneNumber"
-                type="tel"
-                placeholder="Enter your phone number"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                className="mt-1"
-                disabled={isProcessingPayment}
-              />
-          </div>
+          {/* User Info Display */}
+          {user ? (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-blue-800">
+                <div>
+                  <div className="font-medium text-sm">Account Information</div>
+                  <div className="text-xs text-blue-600">
+                    Email: {user.email}
+                    {user.phone_number && ` • Phone: ${user.phone_number}`}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-yellow-800">
+                <div>
+                  <div className="font-medium text-sm">Please Log In</div>
+                  <div className="text-xs text-yellow-600">
+                    You need to be logged in to add funds to your account
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Payment Processing Status */}
           {isProcessingPayment && (
@@ -397,13 +406,18 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
             <div className="flex gap-2">
               <Button
                 onClick={handleAddFunds}
-                disabled={isLoading || isProcessingPayment || !conversion}
+                disabled={isLoading || isProcessingPayment || !conversion || !user}
                 className="flex-1"
               >
                 {isLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Processing...
+                  </>
+                ) : !user ? (
+                  <>
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Login Required
                   </>
                 ) : (
                   <>
