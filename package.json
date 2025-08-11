@@ -96,8 +96,7 @@
     "vite": "^5.4.1",
     "vite-plugin-pwa": "^1.0.1",
     "winston": "^3.17.0",
-    "zod": "^3.23.8",
-    "lovable-tagger": "^1.1.7"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
