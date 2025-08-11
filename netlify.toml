@@ -1,6 +1,6 @@
 [build]
   publish = "dist"
-  command = "npm run build && cd netlify/functions && npm install"
+  command = "npm install && npm run build"
   functions = "netlify/functions"
 
 [build.environment]
@@ -10,7 +10,7 @@
 
 # Production context
 [context.production]
-  command = "npm run build && cd netlify/functions && npm install"
+  command = "npm install && npm run build"
   
 [context.production.environment]
   NODE_ENV = "production"
@@ -18,7 +18,7 @@
 
 # Deploy preview context (for pull requests)
 [context.deploy-preview]
-  command = "npm run build && cd netlify/functions && npm install"
+  command = "npm install && npm run build"
   
 [context.deploy-preview.environment]
   NODE_ENV = "staging"
@@ -26,7 +26,7 @@
 
 # Branch deploy context (for feature branches)
 [context.branch-deploy]
-  command = "npm run build && cd netlify/functions && npm install"
+  command = "npm install && npm run build"
   
 [context.branch-deploy.environment]
   NODE_ENV = "development"
