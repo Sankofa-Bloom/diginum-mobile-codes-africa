@@ -7,6 +7,10 @@
   NODE_VERSION = "18.20.8"
   NPM_VERSION = "8"
   NODE_ENV = "production"
+  # Frontend build environment variables only
+  VITE_SUPABASE_URL = "https://xoivxzjhgjyvuzcmzcas.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvaXZ4empoZ2p5dnV6Y216Y2FzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIyNTQ1NjgsImV4cCI6MjA2NzgzMDU2OH0.ny0Gnf6uVbk9nrLq6VTYqjf9KPVSt2KczF223hf8ZZg"
+  VITE_FAPSHI_ENVIRONMENT = "live"
 
 # Production context
 [context.production]
@@ -35,6 +39,42 @@
 # Plugin to auto-install function dependencies
 [[plugins]]
   package = "@netlify/plugin-functions-install-core"
+
+# Function environment variables (runtime, not build-time)
+# These are available to your Netlify Functions but NOT during the frontend build
+# This prevents "exposed secrets" warnings while keeping your API functional
+[functions.environment]
+  # Supabase
+  SUPABASE_URL = "https://xoivxzjhgjyvuzcmzcas.supabase.co"
+  SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvaXZ4empoZ2p5dnV6Y216Y2FzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIyNTQ1NjgsImV4cCI6MjA2NzgzMDU2OH0.ny0Gnf6uVbk9nrLq6VTYqjf9KPVSt2KczF223hf8ZZg"
+  SUPABASE_JWT_SECRET = "Y1p0iIKXbD9LZngmeH6ovLPG61izKj2s8q2g9hQFK34it0uHzIA5o5TNRxTWWyPkx/c7DT4PDwNZqJ6rwolOKg=="
+  
+  # Fapshi
+  FAPSHI_ENVIRONMENT = "live"
+  FAPSHI_BASE_URL = "https://api.fapshi.com/v1"
+  FAPSHI_PUBLIC_KEY = "b0a2c523-01e3-4557-a2f2-9eccf2fee731"
+  FAPSHI_SECRET_KEY = "FAK_TEST_c51b4f62bac5cfbe9671"
+  
+  # Stripe
+  STRIPE_SECRET_KEY = "sk_test_..."
+  STRIPE_WEBHOOK_SECRET = "whsec_..."
+  
+  # Campay
+  CAMPAY_API_KEY = "mJnzeucsq5Do_1abTN7MOZzfMfCXe_ex9yfRPiHL-cmdLvd8Omx8ILwvzmDtmEhdMA39--0wkXEGr0A3CL477g"
+  CAMPAY_WEBHOOK_KEY = "webhook_key_..."
+  
+  # SMTP
+  SMTP_HOST = "smtp.gmail.com"
+  SMTP_PORT = "587"
+  SMTP_USER = "your-email@gmail.com"
+  SMTP_PASS = "your-app-password"
+  
+  # URLs
+  FRONTEND_URL = "https://diginum.netlify.app"
+  BACKEND_URL = "https://diginum.netlify.app"
+  
+  # Other
+  PORT = "8888"
 
 # API redirects to Netlify Functions (must come first)
 [[redirects]]
