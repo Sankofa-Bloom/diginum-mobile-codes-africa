@@ -18,11 +18,11 @@ CREATE TABLE IF NOT EXISTS public.orders (
     verification_code VARCHAR(10),
     
     -- PRICING INFORMATION
-    app_price DECIMAL(10, 2) NOT NULL COMMENT 'Price charged to customer in app',
-    api_price DECIMAL(10, 2) NOT NULL COMMENT 'Price charged by SMS provider/API',
-    markup_amount DECIMAL(10, 2) NOT NULL COMMENT 'Difference between app_price and api_price',
-    markup_percentage DECIMAL(5, 4) NOT NULL COMMENT 'Markup percentage applied',
-    currency VARCHAR(3) NOT NULL DEFAULT 'USD' COMMENT 'Currency for all prices',
+    app_price DECIMAL(10, 2) NOT NULL, -- Price charged to customer in app
+    api_price DECIMAL(10, 2) NOT NULL, -- Price charged by SMS provider/API
+    markup_amount DECIMAL(10, 2) NOT NULL, -- Difference between app_price and api_price
+    markup_percentage DECIMAL(5, 4) NOT NULL, -- Markup percentage applied
+    currency VARCHAR(3) NOT NULL DEFAULT 'USD', -- Currency for all prices
     
     -- ORDER STATUS
     status VARCHAR(20) DEFAULT 'pending',
@@ -64,11 +64,11 @@ CREATE TABLE IF NOT EXISTS public.services (
     description TEXT,
     
     -- PRICING STRUCTURE
-    app_price DECIMAL(10, 2) NOT NULL COMMENT 'Price charged to customer in app',
-    api_price DECIMAL(10, 2) NOT NULL COMMENT 'Price charged by SMS provider/API',
-    markup_amount DECIMAL(10, 2) NOT NULL COMMENT 'Profit margin amount',
-    markup_percentage DECIMAL(5, 4) NOT NULL COMMENT 'Profit margin percentage',
-    currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+    app_price DECIMAL(10, 2) NOT NULL, -- Price charged to customer in app
+    api_price DECIMAL(10, 2) NOT NULL, -- Price charged by SMS provider/API
+    markup_amount DECIMAL(10, 2) NOT NULL, -- Profit margin amount
+    markup_percentage DECIMAL(5, 4) NOT NULL, -- Profit margin percentage
+    currency VARCHAR(3) NOT NULL DEFAULT 'USD', -- Currency for all prices
     
     -- SERVICE DETAILS
     country_id VARCHAR(10) NOT NULL REFERENCES public.countries(id),
@@ -119,18 +119,18 @@ CREATE TABLE IF NOT EXISTS public.pricing_history (
     country_id VARCHAR(10) NOT NULL REFERENCES public.countries(id),
     
     -- PRICING DETAILS
-    app_price DECIMAL(10, 2) NOT NULL COMMENT 'Price charged to customer',
-    api_price DECIMAL(10, 2) NOT NULL COMMENT 'Price charged by SMS provider',
-    markup_amount DECIMAL(10, 2) NOT NULL COMMENT 'Profit margin amount',
-    markup_percentage DECIMAL(5, 4) NOT NULL COMMENT 'Profit margin percentage',
-    currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+    app_price DECIMAL(10, 2) NOT NULL, -- Price charged to customer
+    api_price DECIMAL(10, 2) NOT NULL, -- Price charged by SMS provider
+    markup_amount DECIMAL(10, 2) NOT NULL, -- Profit margin amount
+    markup_percentage DECIMAL(5, 4) NOT NULL, -- Profit margin percentage
+    currency VARCHAR(3) NOT NULL DEFAULT 'USD', -- Currency for all prices
     
     -- CHANGE TRACKING
-    change_reason VARCHAR(100) COMMENT 'Reason for price change',
-    changed_by UUID REFERENCES auth.users(id) COMMENT 'User who made the change',
+    change_reason VARCHAR(100), -- Reason for price change
+    changed_by UUID REFERENCES auth.users(id), -- User who made the change
     effective_from TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    effective_until TIMESTAMP WITH TIME ZONE COMMENT 'When this pricing expires',
-    is_active BOOLEAN DEFAULT true COMMENT 'Whether this pricing is currently active',
+    effective_until TIMESTAMP WITH TIME ZONE, -- When this pricing expires
+    is_active BOOLEAN DEFAULT true, -- Whether this pricing is currently active
     
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -142,14 +142,14 @@ CREATE TABLE IF NOT EXISTS public.profit_tracking (
     order_id UUID NOT NULL REFERENCES public.orders(id),
     
     -- FINANCIAL BREAKDOWN
-    revenue DECIMAL(10, 2) NOT NULL COMMENT 'Total revenue from customer',
-    cost DECIMAL(10, 2) NOT NULL COMMENT 'Total cost to SMS provider',
-    gross_profit DECIMAL(10, 2) NOT NULL COMMENT 'Revenue - Cost',
-    profit_margin DECIMAL(5, 4) NOT NULL COMMENT 'Profit as percentage of revenue',
+    revenue DECIMAL(10, 2) NOT NULL, -- Total revenue from customer
+    cost DECIMAL(10, 2) NOT NULL, -- Total cost to SMS provider
+    gross_profit DECIMAL(10, 2) NOT NULL, -- Revenue - Cost
+    profit_margin DECIMAL(5, 4) NOT NULL, -- Profit as percentage of revenue
     
     -- CURRENCY AND EXCHANGE
     base_currency VARCHAR(3) NOT NULL DEFAULT 'USD',
-    exchange_rate DECIMAL(10, 6) COMMENT 'Exchange rate if different from base',
+    exchange_rate DECIMAL(10, 6), -- Exchange rate if different from base
     
     -- TRACKING
     tracking_date DATE NOT NULL DEFAULT CURRENT_DATE,
