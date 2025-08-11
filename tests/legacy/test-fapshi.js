@@ -56,15 +56,15 @@ async function testFapshiIntegration() {
   console.log('ℹ️ Make sure to set the following in backend/.env:');
   console.log('   - FAPSHI_PUBLIC_KEY=your-fapshi-public-key');
   console.log('   - FAPSHI_SECRET_KEY=your-fapshi-secret-key');
-  console.log('   - FAPSHI_BASE_URL=https://sandbox.fapshi.com/api/v1');
-  console.log('   - FAPSHI_ENVIRONMENT=sandbox');
+  console.log('   - FAPSHI_BASE_URL=https://api.fapshi.com/v1');
+  console.log('   - FAPSHI_ENVIRONMENT=live');
 
   console.log('\n🎉 Fapshi integration test completed!');
   console.log('\n📋 Next steps:');
   console.log('   1. Add Fapshi API keys to backend/.env');
   console.log('   2. Run the SQL script: backend/fapshi-payments.sql in Supabase');
   console.log('   3. Test with XAF currency in the frontend');
-  console.log('   4. Switch to production keys when ready to go live');
+  console.log('   4. ✅ Already switched to live mode');
 }
 
 // Only run if this file is executed directly

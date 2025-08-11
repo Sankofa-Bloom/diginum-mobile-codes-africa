@@ -89,18 +89,22 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
           conversion.rate,
           conversion.fxBuffer
         );
-        console.log('Payment transaction saved successfully');
+        if (import.meta.env.DEV) {
+          console.log('Payment transaction saved successfully');
+        }
       } catch (dbError: any) {
         console.warn('Failed to save transaction to database (continuing with payment):', dbError);
         // Don't block payment if database save fails
       }
 
-      console.log('Initiating payment with data:', {
-        amount: conversion.finalAmount,
-        currency: conversion.currency,
-        phoneNumber: phoneNumber,
-        originalAmountUSD: conversion.originalAmount
-      });
+      if (import.meta.env.DEV) {
+        console.log('Initiating payment with data:', {
+          amount: conversion.finalAmount,
+          currency: conversion.currency,
+          phoneNumber: phoneNumber,
+          originalAmountUSD: conversion.originalAmount
+        });
+      }
 
       const response = await apiClient.post('/add-funds/campay', {
         amount: conversion.finalAmount, // Send converted amount with FX buffer
@@ -109,7 +113,9 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
         originalAmountUSD: conversion.originalAmount // Include original USD amount for reference
       });
 
-      console.log('Payment API response:', response);
+      if (import.meta.env.DEV) {
+        console.log('Payment API response:', response);
+      }
 
       if (response?.success || response?.data?.success) {
         const reference = response.reference || response.data?.reference;
@@ -147,7 +153,9 @@ const AddFundsModal: React.FC<AddFundsModalProps> = ({
         const response = await apiClient.get(`/add-funds/status/${reference}`);
         
         if (response.data?.status === 'completed') {
-          console.log('Payment completed! Response:', response.data);
+          if (import.meta.env.DEV) {
+            console.log('Payment completed! Response:', response.data);
+          }
           const creditedAmount = response.data.amountCredited || response.data.amount_usd || 10;
           const newBalance = response.data.newBalance;
           

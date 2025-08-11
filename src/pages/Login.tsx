@@ -60,7 +60,9 @@ export default function LoginPage() {
     setIsLoading(true);
     
     try {
+      if (import.meta.env.DEV) {
       console.log('Submitting login form for:', email);
+    }
       await login(email.trim(), password);
       
       if (!isMounted) return;

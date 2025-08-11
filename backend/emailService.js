@@ -250,7 +250,9 @@ export const sendVerificationEmail = async (user, token, baseUrl) => {
     };
 
     const result = await transporter.sendMail(mailOptions);
-    console.log('Verification email sent:', result.messageId);
+          if (process.env.NODE_ENV === 'development') {
+        console.log('Verification email sent:', result.messageId);
+      }
     return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error('Error sending verification email:', error);
@@ -272,7 +274,9 @@ export const sendWelcomeEmail = async (user, baseUrl) => {
     };
 
     const result = await transporter.sendMail(mailOptions);
-    console.log('Welcome email sent:', result.messageId);
+          if (process.env.NODE_ENV === 'development') {
+        console.log('Welcome email sent:', result.messageId);
+      }
     return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error('Error sending welcome email:', error);
@@ -294,7 +298,9 @@ export const sendPasswordResetEmail = async (user, token, baseUrl) => {
     };
 
     const result = await transporter.sendMail(mailOptions);
-    console.log('Password reset email sent:', result.messageId);
+          if (process.env.NODE_ENV === 'development') {
+        console.log('Password reset email sent:', result.messageId);
+      }
     return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error('Error sending password reset email:', error);

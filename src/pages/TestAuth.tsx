@@ -15,7 +15,9 @@ export default function TestAuthPage() {
     try {
       const result = await signup(email, password);
       toast.success('Signup successful!');
-      console.log('Signup result:', result);
+      if (import.meta.env.DEV) {
+        console.log('Signup result:', result);
+      }
     } catch (error: any) {
       toast.error(`Signup failed: ${error.message}`);
       console.error('Signup error:', error);
@@ -29,7 +31,9 @@ export default function TestAuthPage() {
     try {
       const result = await login(email, password);
       toast.success('Login successful!');
-      console.log('Login result:', result);
+      if (import.meta.env.DEV) {
+        console.log('Login result:', result);
+      }
       await checkCurrentUser();
     } catch (error: any) {
       toast.error(`Login failed: ${error.message}`);

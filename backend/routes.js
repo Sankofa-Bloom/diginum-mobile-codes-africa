@@ -186,7 +186,7 @@ export default async function routes(fastify, opts) {
       }
 
       // Send welcome email
-      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const baseUrl = process.env.FRONTEND_URL || 'https://your-domain.com';
       const welcomeResult = await sendWelcomeEmail(result.user, baseUrl);
 
       if (!welcomeResult.success) {
@@ -252,7 +252,7 @@ export default async function routes(fastify, opts) {
       }
 
       // Send verification email
-      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const baseUrl = process.env.FRONTEND_URL || 'https://your-domain.com';
       const emailResult = await sendVerificationEmail(user, verificationToken, baseUrl);
 
       if (!emailResult.success) {
@@ -1178,15 +1178,17 @@ export default async function routes(fastify, opts) {
         return reply.code(500).send({ error: 'Failed to update order status' });
       }
 
-      // Log the payment details
-      console.log('Payment webhook received:', {
-        transactionId,
-        status,
-        amount,
-        phoneNumber,
-        reference,
-        orderId: order.id
-      });
+      // Log the payment details (development only)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Payment webhook received:', {
+          transactionId,
+          status,
+          amount,
+          phoneNumber,
+          reference,
+          orderId: order.id
+        });
+      }
 
       return reply.code(200).send({ received: true });
     } catch (error) {

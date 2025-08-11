@@ -7,9 +7,13 @@ dotenv.config();
 
 const fastify = Fastify({ logger: true });
 
-// Register CORS with specific configuration
+// Register CORS with production-ready configuration
+const allowedOrigins = process.env.NODE_ENV === 'production' 
+  ? [process.env.FRONTEND_URL, 'https://your-domain.com'] // Add your actual production domain
+  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+
 await fastify.register(cors, {
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,

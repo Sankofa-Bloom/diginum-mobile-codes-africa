@@ -171,7 +171,10 @@ class FapshiAPI {
         return false;
       }
 
-      console.log(`Fapshi webhook received: ${payload.event}`, payload.data);
+      // Log webhook events in development only
+      if (import.meta.env.DEV) {
+        console.log(`Fapshi webhook received: ${payload.event}`, payload.data);
+      }
       
       // Process the webhook based on event type
       switch (payload.event) {
@@ -209,7 +212,9 @@ class FapshiAPI {
    */
   private async handleSuccessfulPayment(data: any): Promise<void> {
     // Implement successful payment logic
-    console.log('Payment successful:', data);
+    if (import.meta.env.DEV) {
+      console.log('Payment successful:', data);
+    }
     // Update user balance, send SMS number, etc.
   }
 
@@ -218,7 +223,9 @@ class FapshiAPI {
    */
   private async handleFailedPayment(data: any): Promise<void> {
     // Implement failed payment logic
-    console.log('Payment failed:', data);
+    if (import.meta.env.DEV) {
+      console.log('Payment failed:', data);
+    }
     // Notify user, log failure, etc.
   }
 
@@ -227,7 +234,9 @@ class FapshiAPI {
    */
   private async handlePendingPayment(data: any): Promise<void> {
     // Implement pending payment logic
-    console.log('Payment pending:', data);
+    if (import.meta.env.DEV) {
+      console.log('Payment pending:', data);
+    }
     // Update status, wait for final confirmation, etc.
   }
 }
@@ -236,7 +245,7 @@ class FapshiAPI {
 export const fapshiConfig: FapshiConfig = {
   publicKey: import.meta.env.VITE_FAPSHI_PUBLIC_KEY || '',
   secretKey: import.meta.env.VITE_FAPSHI_SECRET_KEY || '',
-  environment: import.meta.env.VITE_FAPSHI_ENVIRONMENT as 'sandbox' | 'live' || 'sandbox',
+  environment: import.meta.env.VITE_FAPSHI_ENVIRONMENT as 'sandbox' | 'live' || 'live',
 };
 
 // Export the Fapshi API instance

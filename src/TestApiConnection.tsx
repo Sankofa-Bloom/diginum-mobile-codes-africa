@@ -8,7 +8,9 @@ const TestApiConnection = () => {
   useEffect(() => {
     const testConnection = async () => {
       try {
-        console.log('Attempting to call API at:', `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api'}/health`);
+        if (import.meta.env.DEV) {
+      console.log('Attempting to call API at:', `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api'}/health`);
+    }
         const response = await apiClient.get('/health', {
           // Add timeout and other options here if needed
           headers: {
@@ -17,7 +19,9 @@ const TestApiConnection = () => {
           },
         });
         
-        console.log('Health check response:', response);
+                  if (import.meta.env.DEV) {
+            console.log('Health check response:', response);
+          }
         setHealthStatus(`Success! Status: ${response.status}`);
       } catch (err: any) {
         console.error('API connection error details:', {

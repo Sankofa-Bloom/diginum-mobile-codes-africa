@@ -4,7 +4,9 @@ import { API_BASE_URL } from '@/config';
 
 export async function signup(email: string, password: string) {
   try {
-    console.log('Attempting signup for:', email);
+    if (import.meta.env.DEV) {
+      console.log('Attempting signup for:', email);
+    }
     
     // Use Supabase directly for signup instead of backend API
     const { data, error } = await supabase.auth.signUp({
@@ -21,7 +23,9 @@ export async function signup(email: string, password: string) {
       throw new Error('No user data returned from signup');
     }
     
-    console.log('Signup successful for:', email);
+    if (import.meta.env.DEV) {
+      console.log('Signup successful for:', email);
+    }
     return { user: data.user };
   } catch (error) {
     console.error('Signup error:', error);
@@ -31,7 +35,9 @@ export async function signup(email: string, password: string) {
 
 export async function login(email: string, password: string) {
   try {
-    console.log('Attempting login for:', email);
+    if (import.meta.env.DEV) {
+      console.log('Attempting login for:', email);
+    }
     
     // Validate inputs
     if (!email || !password) {
@@ -55,7 +61,9 @@ export async function login(email: string, password: string) {
       throw new Error('No user data returned from authentication');
     }
     
-    console.log('Login successful for:', trimmedEmail);
+    if (import.meta.env.DEV) {
+      console.log('Login successful for:', trimmedEmail);
+    }
     return data;
   } catch (error) {
     console.error('Login error:', error);
@@ -65,7 +73,9 @@ export async function login(email: string, password: string) {
 
 export async function logout() {
   try {
-    console.log('Attempting logout');
+    if (import.meta.env.DEV) {
+      console.log('Attempting logout');
+    }
     
     // Clear any local storage items that might be related to auth
     localStorage.removeItem('sb-auth-token');
@@ -82,7 +92,9 @@ export async function logout() {
       throw error;
     }
     
-    console.log('Logout successful');
+    if (import.meta.env.DEV) {
+      console.log('Logout successful');
+    }
     // Refresh the page to ensure all state is cleared
     window.location.href = '/';
   } catch (error) {
@@ -95,7 +107,9 @@ export async function logout() {
 
 export async function getCurrentUser() {
   try {
-    console.log('Getting current user');
+    if (import.meta.env.DEV) {
+      console.log('Getting current user');
+    }
     
     // First check if we have an active session
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
@@ -106,7 +120,9 @@ export async function getCurrentUser() {
     }
     
     if (!sessionData.session) {
-      console.log('No active session found');
+      if (import.meta.env.DEV) {
+        console.log('No active session found');
+      }
       return null;
     }
 
@@ -121,13 +137,17 @@ export async function getCurrentUser() {
     }
     
     if (!userData.user) {
-      console.log('No user data found');
+      if (import.meta.env.DEV) {
+        console.log('No user data found');
+      }
       // Clear invalid session
       await supabase.auth.signOut();
       return null;
     }
 
-    console.log('Current user found:', userData.user.email);
+          if (import.meta.env.DEV) {
+        console.log('Current user found:', userData.user.email);
+      }
     return userData.user;
     
   } catch (error) {
@@ -144,9 +164,13 @@ export async function getCurrentUser() {
 
 export async function forgotPassword(email: string) {
   try {
-    console.log('Attempting password reset for:', email);
+    if (import.meta.env.DEV) {
+      console.log('Attempting password reset for:', email);
+    }
     const response = await apiClient.post('/auth/forgot-password', { email });
-    console.log('Password reset email sent');
+    if (import.meta.env.DEV) {
+      console.log('Password reset email sent');
+    }
     return response;
   } catch (error) {
     console.error('Password reset error:', error);

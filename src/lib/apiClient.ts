@@ -12,8 +12,10 @@ const apiClient = axios.create({
   },
 });
 
-// Log the base URL being used
-console.log('API Base URL:', API_BASE_URL);
+// Log the base URL being used (development only)
+if (import.meta.env.DEV) {
+  console.log('API Base URL:', API_BASE_URL);
+}
 
 apiClient.interceptors.request.use(async (config) => {
   try {

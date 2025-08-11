@@ -128,33 +128,51 @@ const BuyPage = () => {
   const loadAccountBalance = async () => {
     setLoadingBalance(true);
     try {
-      console.log('Loading account balance...');
+      if (import.meta.env.DEV) {
+        console.log('Loading account balance...');
+      }
       const response = await apiClient.get('/account-balance');
-      console.log('Balance API response:', response);
-      console.log('Full response object:', JSON.stringify(response, null, 2));
+      if (import.meta.env.DEV) {
+        console.log('Balance API response:', response);
+        console.log('Full response object:', JSON.stringify(response, null, 2));
+      }
       
       // Handle multiple response formats
       let balance = 0;
       if (response.data?.balance !== undefined) {
         balance = response.data.balance;
-        console.log('Found balance in response.data.balance:', balance);
+        if (import.meta.env.DEV) {
+          console.log('Found balance in response.data.balance:', balance);
+        }
       } else if (response.balance !== undefined) {
         balance = response.balance;
-        console.log('Found balance in response.balance:', balance);
+        if (import.meta.env.DEV) {
+          console.log('Found balance in response.balance:', balance);
+        }
       } else if (typeof response === 'object' && response.balance !== undefined) {
         balance = response.balance;
-        console.log('Found balance in direct response:', balance);
+        if (import.meta.env.DEV) {
+          console.log('Found balance in direct response:', balance);
+        }
       }
-      console.log('Final parsed balance:', balance);
+      if (import.meta.env.DEV) {
+        console.log('Final parsed balance:', balance);
+      }
       
       const finalBalance = parseFloat(balance) || 0;
       setAccountBalance(finalBalance);
-      console.log('Account balance loaded and set:', finalBalance);
+      if (import.meta.env.DEV) {
+        console.log('Account balance loaded and set:', finalBalance);
+      }
       
       if (finalBalance > 0) {
-        console.log('✅ Balance loaded successfully: $' + finalBalance);
+        if (import.meta.env.DEV) {
+          console.log('✅ Balance loaded successfully: $' + finalBalance);
+        }
       } else {
-        console.warn('⚠️ Balance is $0 - check database setup');
+        if (import.meta.env.DEV) {
+          console.warn('⚠️ Balance is $0 - check database setup');
+        }
       }
     } catch (error: any) {
       console.error('❌ Error loading account balance:', error);

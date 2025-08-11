@@ -20,13 +20,15 @@ const getApiBaseUrl = () => {
 
 export const API_BASE_URL = getApiBaseUrl();
 
-// Debug logging for API URL determination
-console.log('API Configuration:', {
-  'import.meta.env.PROD': import.meta.env.PROD,
-  'window.location.origin': typeof window !== 'undefined' ? window.location.origin : 'SSR',
-  'VITE_API_BASE_URL': import.meta.env.VITE_API_BASE_URL,
-  'Final API_BASE_URL': API_BASE_URL
-});
+// Debug logging for API URL determination (development only)
+if (import.meta.env.DEV) {
+  console.log('API Configuration:', {
+    'import.meta.env.PROD': import.meta.env.PROD,
+    'window.location.origin': typeof window !== 'undefined' ? window.location.origin : 'SSR',
+    'VITE_API_BASE_URL': import.meta.env.VITE_API_BASE_URL,
+    'Final API_BASE_URL': API_BASE_URL
+  });
+}
 
 // Supabase configuration (public keys only)
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
