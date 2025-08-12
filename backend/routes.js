@@ -1128,71 +1128,32 @@ export default async function routes(fastify, opts) {
     }
   });
 
-  // Campay Webhook endpoint
-  fastify.post('/api/webhook/campay', async (request, reply) => {
+  // Simple Fapshi webhook endpoint
+  fastify.post('/api/webhook/fapshi', async (request, reply) => {
     try {
-      const { transactionId, status, amount, currency, phoneNumber, reference } = request.body;
+      const { reference, status, amount, currency } = request.body;
       
-      // Verify webhook key
-      const webhookKey = request.headers['x-webhook-key'];
-      if (!webhookKey || webhookKey !== process.env.CAMPAY_WEBHOOK_KEY) {
-        return reply.code(401).send({ error: 'Invalid webhook key' });
+      if (!reference || !status) {
+        return reply.code(400).send({ error: 'Missing required fields' });
       }
 
-      // Find the order associated with this payment
-      const { data: order, error: orderError } = await fastify.supabase
-        .from('orders')
-        .select('*')
-        .eq('reference', reference)
-        .single();
-
-      // Only accept USD payments
-      if (currency !== 'USD') {
-        return reply.code(400).send({ error: 'Only USD payments are accepted' });
-      }
-
-      if (orderError || !order) {
-        console.error('Order not found for reference:', reference);
-        return reply.code(404).send({ error: 'Order not found' });
-      }
-
-      // Update order status based on payment status
-      const newStatus = status === 'completed' ? 'completed' : 'failed';
-
-      // Update order amount with Stripe fees if applicable
-      if (status === 'completed') {
-        const stripeFee = amount * 0.029 + 0.3;
-        const finalAmount = amount + stripeFee;
-        await fastify.supabase
-          .from('orders')
-          .update({ amount: finalAmount })
-          .eq('id', order.id);
-      }
+      // Update payment status
       const { error: updateError } = await fastify.supabase
-        .from('orders')
-        .update({ status: newStatus })
-        .eq('id', order.id);
+        .from('fapshi_payments')
+        .update({ 
+          status: status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('reference', reference);
 
       if (updateError) {
-        console.error('Failed to update order status:', updateError);
-        return reply.code(500).send({ error: 'Failed to update order status' });
-      }
-
-      // Log the payment details (development only)
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Payment webhook received:', {
-          transactionId,
-          status,
-          amount,
-          phoneNumber,
-          reference,
-          orderId: order.id
-        });
+        fastify.log.error('Failed to update payment status:', updateError);
+        return reply.code(500).send({ error: 'Failed to update payment status' });
       }
 
       return reply.code(200).send({ received: true });
     } catch (error) {
-      console.error('Error processing webhook:', error);
+      fastify.log.error('Error processing Fapshi webhook:', error);
       return reply.code(500).send({ error: 'Internal server error' });
     }
   });
@@ -2093,105 +2054,47 @@ export default async function routes(fastify, opts) {
     }
   });
 
-  // Initiate Campay payment for add funds
-  fastify.post('/add-funds/campay', { preHandler: requireAuth }, async (request, reply) => {
+  // Simple Fapshi add funds endpoint
+  fastify.post('/add-funds/fapshi', { preHandler: requireAuth }, async (request, reply) => {
     try {
-      const { amount, currency, phoneNumber, originalAmountUSD } = request.body;
-      const userId = request.user.sub;
+      const { amount, currency = 'USD' } = request.body;
+      const userId = request.user.id;
 
       if (!amount || amount <= 0) {
         return reply.code(400).send({ error: 'Invalid amount' });
       }
 
-      if (!currency) {
-        return reply.code(400).send({ error: 'Currency is required' });
-      }
-
-      if (!phoneNumber) {
-        return reply.code(400).send({ error: 'Phone number is required' });
-      }
-
-      // Validate that originalAmountUSD is provided for non-USD currencies
-      if (currency !== 'USD' && !originalAmountUSD) {
-        return reply.code(400).send({ error: 'Original USD amount is required for currency conversion' });
-      }
-
-      // Get exchange rate for the currency
-      const { data: rateData, error: rateError } = await fastify.supabase
-        .from('exchange_rates')
-        .select('rate, markup')
-        .eq('currency', currency.toUpperCase())
+      // Create payment record
+      const reference = `FAPSHI_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      const { data: payment, error: paymentError } = await fastify.supabase
+        .from('fapshi_payments')
+        .insert([{
+          user_id: userId,
+          reference: reference,
+          amount: amount,
+          currency: currency,
+          status: 'pending'
+        }])
+        .select()
         .single();
 
-      if (rateError || !rateData) {
-        return reply.code(400).send({ error: 'Currency not supported' });
+      if (paymentError) {
+        fastify.log.error('Error creating payment record:', paymentError);
+        return reply.code(500).send({ error: 'Failed to create payment record' });
       }
 
-      // Calculate USD amount with markup
-      // If user pays 100 EUR and rate is 0.85 (1 USD = 0.85 EUR)
-      // Then: 100 EUR ÷ 0.85 = 117.65 USD (base amount)
-      // With 10% markup: 117.65 × 1.10 = 129.41 USD (final amount)
-      const exchangeRate = rateData.rate;
-      const markup = rateData.markup || 10.0; // Default 10% markup
-      const baseUsdAmount = amount / exchangeRate; // Convert to USD
-      const usdAmount = baseUsdAmount * (1 + markup / 100); // Add markup
+      return reply.code(200).send({
+        success: true,
+        payment: payment,
+        message: 'Payment record created successfully'
+      });
 
-      // Create a unique reference for this payment
-      const reference = `ADDFUNDS_${userId}_${Date.now()}`;
-
-      // Store the pending payment in database (with fallback if table doesn't exist)
-      let payment = null;
-      try {
-        const { data: paymentData, error: paymentError } = await fastify.supabase
-          .from('add_funds_payments')
-          .insert([{
-            user_id: userId,
-            amount_usd: usdAmount,
-            amount_original: amount,
-            currency: currency.toUpperCase(),
-            phone_number: phoneNumber,
-            reference: reference,
-            status: 'pending',
-            exchange_rate: exchangeRate,
-            markup: markup
-          }])
-          .select()
-          .single();
-
-        if (paymentError) {
-          fastify.log.error('Error creating payment record:', paymentError);
-          // Continue without database storage for now
-          payment = {
-            id: 'temp_' + Date.now(),
-            user_id: userId,
-            amount_usd: usdAmount,
-            amount_original: amount,
-            currency: currency.toUpperCase(),
-            phone_number: phoneNumber,
-            reference: reference,
-            status: 'pending',
-            exchange_rate: exchangeRate,
-            markup: markup
-          };
-        } else {
-          payment = paymentData;
-        }
-      } catch (error) {
-        fastify.log.error('Error with payment database:', error);
-        // Continue without database storage for now
-        payment = {
-          id: 'temp_' + Date.now(),
-          user_id: userId,
-          amount_usd: usdAmount,
-          amount_original: amount,
-          currency: currency.toUpperCase(),
-          phone_number: phoneNumber,
-          reference: reference,
-          status: 'pending',
-          exchange_rate: exchangeRate,
-          markup: markup
-        };
-      }
+    } catch (error) {
+      fastify.log.error('Error creating Fapshi payment:', error);
+      return reply.code(500).send({ error: 'Internal server error' });
+    }
+  });
 
       // Call Campay API to initiate payment
       const campayResponse = await fetch('https://www.campay.net/api/collect/', {
@@ -2234,24 +2137,24 @@ export default async function routes(fastify, opts) {
         currency: currency.toUpperCase(),
         exchange_rate: exchangeRate,
         markup: markup,
-        message: 'Payment initiated successfully'
+        message: 'Payment record created successfully'
       });
 
     } catch (error) {
-      fastify.log.error('Error initiating Campay payment:', error);
-      return reply.code(500).send({ error: 'Failed to initiate payment' });
+      fastify.log.error('Error creating Fapshi payment:', error);
+      return reply.code(500).send({ error: 'Internal server error' });
     }
   });
 
-  // Check add funds payment status
+  // Check Fapshi payment status
   fastify.get('/add-funds/status/:reference', { preHandler: requireAuth }, async (request, reply) => {
     try {
       const { reference } = request.params;
-      const userId = request.user.sub;
+      const userId = request.user.id;
 
       // Get payment record
       const { data: payment, error: paymentError } = await fastify.supabase
-        .from('add_funds_payments')
+        .from('fapshi_payments')
         .select('*')
         .eq('reference', reference)
         .eq('user_id', userId)
@@ -2261,87 +2164,16 @@ export default async function routes(fastify, opts) {
         return reply.code(404).send({ error: 'Payment not found' });
       }
 
-      // Check status with Campay API
-      if (payment.campay_transaction_id) {
-        const campayResponse = await fetch(`https://www.campay.net/api/transaction/${payment.campay_transaction_id}/`, {
-          headers: {
-            'Authorization': `Token ${process.env.CAMPAY_API_KEY}`
-          }
-        });
-
-        if (campayResponse.ok) {
-          const campayData = await campayResponse.json();
-          
-          // Update payment status if changed
-          if (campayData.status !== payment.status) {
-            await fastify.supabase
-              .from('add_funds_payments')
-              .update({ status: campayData.status })
-              .eq('id', payment.id);
-
-            // If payment is completed, add funds to user account
-            if (campayData.status === 'completed' && payment.status !== 'completed') {
-              const { data: balanceData, error: balanceError } = await fastify.supabase
-                .from('user_balances')
-                .select('balance')
-                .eq('user_id', userId)
-                .eq('currency', 'USD')
-                .single();
-
-              if (balanceError && balanceError.code === 'PGRST116') {
-                // Create new balance record if doesn't exist
-                await fastify.supabase
-                  .from('user_balances')
-                  .insert([{
-                    user_id: userId,
-                    balance: payment.amount_usd,
-                    currency: 'USD'
-                  }]);
-              } else if (balanceError) {
-                fastify.log.error('Error fetching balance:', balanceError);
-              } else {
-                // Update existing balance
-                const currentBalance = balanceData.balance || 0;
-                const newBalance = currentBalance + payment.amount_usd;
-                await fastify.supabase
-                  .from('user_balances')
-                  .update({ 
-                    balance: newBalance,
-                    updated_at: new Date().toISOString()
-                  })
-                  .eq('user_id', userId)
-                  .eq('currency', 'USD');
-              }
-
-              // Update payment status to completed
-              await fastify.supabase
-                .from('add_funds_payments')
-                .update({ status: 'completed' })
-                .eq('id', payment.id);
-            }
-          }
-
-          return reply.code(200).send({
-            status: campayData.status,
-            amount_usd: payment.amount_usd,
-            amount_original: payment.amount_original,
-            currency: payment.currency,
-            reference: payment.reference
-          });
-        }
-      }
-
       return reply.code(200).send({
         status: payment.status,
-        amount_usd: payment.amount_usd,
-        amount_original: payment.amount_original,
+        amount: payment.amount,
         currency: payment.currency,
         reference: payment.reference
       });
 
     } catch (error) {
       fastify.log.error('Error checking payment status:', error);
-      return reply.code(500).send({ error: 'Failed to check payment status' });
+      return reply.code(500).send({ error: 'Internal server error' });
     }
   });
 
@@ -2869,4 +2701,94 @@ export default async function routes(fastify, opts) {
       fastify.log.error('Error handling failed payment:', error);
     }
   }
+
+  // Simple Fapshi payment verification
+  fastify.get('/api/payment/fapshi/verify/:reference', { preHandler: requireAuth }, async (request, reply) => {
+    try {
+      const { reference } = request.params;
+      const userId = request.user.id;
+
+      // Get payment record from database
+      const { data: payment, error: paymentError } = await fastify.supabase
+        .from('fapshi_payments')
+        .select('*')
+        .eq('reference', reference)
+        .eq('user_id', userId)
+        .single();
+
+      if (paymentError) {
+        return reply.code(404).send({
+          error: 'Payment not found',
+        });
+      }
+
+      // Verify payment with Fapshi
+      const verificationResponse = await fetch(`${process.env.FAPSHI_BASE_URL}/payments/status?reference=${reference}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${process.env.FAPSHI_SECRET_KEY}`,
+          'X-Public-Key': process.env.FAPSHI_PUBLIC_KEY,
+        },
+      });
+
+      const result = await verificationResponse.json();
+
+      if (!verificationResponse.ok) {
+        return reply.code(400).send({
+          error: result.message || 'Payment verification failed',
+        });
+      }
+
+      // Update payment status
+      await fastify.supabase
+        .from('fapshi_payments')
+        .update({
+          status: result.data.status,
+          fapshi_transaction_id: result.data.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('reference', reference);
+
+      // If payment is successful, credit user balance
+      if (result.data.status === 'completed') {
+        const creditResult = await creditUserBalance(fastify, userId, result.data.amount / 100, result.data.currency);
+        
+        if (!creditResult.success) {
+          return reply.code(500).send({
+            error: 'Payment completed but failed to update balance',
+            details: creditResult.error
+          });
+        }
+
+        return reply.code(200).send({
+          success: true,
+          data: {
+            reference: result.data.reference,
+            amount: result.data.amount / 100,
+            currency: result.data.currency,
+            status: result.data.status,
+            newBalance: creditResult.newBalance,
+            message: 'Payment completed and balance updated successfully',
+          },
+        });
+      }
+
+      return reply.code(200).send({
+        success: true,
+        data: {
+          reference: result.data.reference,
+          amount: result.data.amount / 100,
+          currency: result.data.currency,
+          status: result.data.status,
+          message: 'Payment verification completed',
+        },
+      });
+
+    } catch (error) {
+      fastify.log.error('Payment verification error:', error);
+      return reply.code(500).send({
+        error: 'Internal server error',
+      });
+    }
+  });
 }
