@@ -8,6 +8,7 @@ import { Loader2, CreditCard, Smartphone, CheckCircle, XCircle } from 'lucide-re
 import { toast } from 'sonner';
 import { fapshiAPI, formatFapshiAmount, isFapshiSupported } from '@/lib/fapshi';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { supabase } from '@/lib/supabaseClient';
 
 interface FapshiPaymentProps {
   amount: number;
@@ -143,15 +144,53 @@ export default function FapshiPayment({
 
     const checkStatus = async () => {
       try {
-        const response = await fetch(`/.netlify/functions/api/fapshi/payments/status?ref=${reference}`);
-        const result = await response.json();
+        // First check if payment is completed
+        const statusResponse = await fetch(`/.netlify/functions/api/fapshi/payments/status?ref=${reference}`);
+        const statusResult = await statusResponse.json();
         
-        if (result.status === 'completed') {
-          setPaymentStatus('success');
-          toast.success(result.message || 'Payment completed successfully!');
-          onSuccess?.(result);
-          return;
-        } else if (result.status === 'failed') {
+        if (statusResult.status === 'completed') {
+          // Payment is completed, now actually credit the user's balance
+          if (user?.id) {
+            try {
+              const completeResponse = await fetch('/.netlify/functions/api/fapshi/payments/complete', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                },
+                body: JSON.stringify({
+                  reference: reference,
+                  userId: user.id
+                })
+              });
+              
+              const completeResult = await completeResponse.json();
+              
+              if (completeResult.success) {
+                setPaymentStatus('success');
+                toast.success(completeResult.message || 'Payment completed and balance updated successfully!');
+                onSuccess?.(completeResult);
+                return;
+              } else {
+                setPaymentStatus('error');
+                toast.error(completeResult.message || 'Payment completed but failed to update balance');
+                onError?.('Balance update failed');
+                return;
+              }
+            } catch (completeError) {
+              console.error('Payment completion error:', completeError);
+              setPaymentStatus('error');
+              toast.error('Payment completed but failed to update balance. Please contact support.');
+              onError?.('Balance update failed');
+              return;
+            }
+          } else {
+            setPaymentStatus('error');
+            toast.error('User not authenticated. Please log in again.');
+            onError?.('Authentication error');
+            return;
+          }
+        } else if (statusResult.status === 'failed') {
           setPaymentStatus('error');
           toast.error('Payment failed or was cancelled');
           onError?.('Payment failed');
