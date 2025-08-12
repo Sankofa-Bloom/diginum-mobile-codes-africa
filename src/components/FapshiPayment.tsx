@@ -152,11 +152,27 @@ export default function FapshiPayment({
           // Payment is completed, now actually credit the user's balance
           if (user?.id) {
             try {
+              console.log('Payment completed, attempting to credit balance for user:', user.id);
+              
+              // Get the current session token
+              const { data: sessionData } = await supabase.auth.getSession();
+              const accessToken = sessionData.session?.access_token;
+              
+              if (!accessToken) {
+                console.error('No access token found');
+                setPaymentStatus('error');
+                toast.error('Authentication token expired. Please log in again.');
+                onError?.('Authentication token expired');
+                return;
+              }
+              
+              console.log('Making balance update request with token:', accessToken.substring(0, 20) + '...');
+              
               const completeResponse = await fetch('/.netlify/functions/api/fapshi/payments/complete', {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                  'Authorization': `Bearer ${accessToken}`
                 },
                 body: JSON.stringify({
                   reference: reference,
@@ -164,7 +180,16 @@ export default function FapshiPayment({
                 })
               });
               
+              console.log('Balance update response status:', completeResponse.status);
+              
+              if (!completeResponse.ok) {
+                const errorText = await completeResponse.text();
+                console.error('Balance update failed with status:', completeResponse.status, 'Error:', errorText);
+                throw new Error(`HTTP ${completeResponse.status}: ${errorText}`);
+              }
+              
               const completeResult = await completeResponse.json();
+              console.log('Balance update result:', completeResult);
               
               if (completeResult.success) {
                 setPaymentStatus('success');

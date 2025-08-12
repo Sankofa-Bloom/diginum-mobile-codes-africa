@@ -623,13 +623,55 @@ exports.handler = async (event, context) => {
     // Fapshi payment completion endpoint (for demo purposes)
     if (pathParts[0] === 'fapshi' && pathParts[1] === 'payments' && pathParts[2] === 'complete' && httpMethod === 'POST') {
       try {
+        console.log('Fapshi payment completion endpoint called');
+        console.log('Request body:', requestBody);
+        console.log('Headers:', event.headers);
+        
         const { reference, userId } = requestBody;
         
         if (!reference || !userId) {
+          console.error('Missing required fields:', { reference, userId });
           return {
             statusCode: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             body: JSON.stringify({ error: 'Missing reference or userId' })
+          };
+        }
+
+        // Check authentication
+        const authHeader = event.headers.authorization || event.headers.Authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          console.error('Missing or invalid authorization header');
+          return {
+            statusCode: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Authentication required' })
+          };
+        }
+
+        const token = authHeader.split(' ')[1];
+        console.log('Token received:', token.substring(0, 20) + '...');
+        
+        // Verify token with Supabase
+        const { data: userData, error: userError } = await supabase.auth.getUser(token);
+        if (userError || !userData.user) {
+          console.error('Token verification failed:', userError);
+          return {
+            statusCode: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Invalid authentication token' })
+          };
+        }
+
+        console.log('User authenticated:', userData.user.id);
+        
+        // Verify the userId matches the authenticated user
+        if (userData.user.id !== userId) {
+          console.error('UserId mismatch:', { authenticated: userData.user.id, requested: userId });
+          return {
+            statusCode: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Unauthorized: userId mismatch' })
           };
         }
 
@@ -716,6 +758,8 @@ exports.handler = async (event, context) => {
             message: 'Payment completed but failed to update balance. Please contact support.' 
           };
         }
+
+        console.log('Returning credit info:', creditInfo);
 
         return {
           statusCode: 200,
