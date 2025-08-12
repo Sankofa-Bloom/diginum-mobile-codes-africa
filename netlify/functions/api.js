@@ -676,6 +676,19 @@ exports.handler = async (event, context) => {
           };
         }
 
+        // Create a new Supabase client with the user's access token for database operations
+        const userSupabase = createClient(
+          process.env.SUPABASE_URL,
+          process.env.SUPABASE_ANON_KEY,
+          {
+            global: {
+              headers: {
+                Authorization: `Bearer ${token}`
+              }
+            }
+          }
+        );
+
         // Convert XAF to USD (approximate rate: 1 USD ≈ 600 XAF)
         const xafAmount = 1000; // Default XAF amount for demo
         const usdAmount = xafAmount / 600; // Convert to USD
@@ -686,13 +699,17 @@ exports.handler = async (event, context) => {
         let creditInfo = null;
         
         try {
+          console.log('Starting database balance update for user:', userId);
+          
           // First, try to get existing balance
-          const { data: existingBalance, error: balanceError } = await supabase
+          const { data: existingBalance, error: balanceError } = await userSupabase
             .from('user_balances')
             .select('balance')
             .eq('user_id', userId)
             .eq('currency', 'USD')
             .single();
+
+          console.log('Balance query result:', { existingBalance, balanceError });
 
           let currentBalance = 0;
           let newBalance = usdAmount;
@@ -700,7 +717,7 @@ exports.handler = async (event, context) => {
           if (balanceError && balanceError.code === 'PGRST116') {
             // No existing balance record, create new one
             console.log('Creating new balance record for user:', userId);
-            const { data: insertResult, error: insertError } = await supabase
+            const { data: insertResult, error: insertError } = await userSupabase
               .from('user_balances')
               .insert([{
                 user_id: userId,
@@ -709,6 +726,8 @@ exports.handler = async (event, context) => {
               }])
               .select('balance')
               .single();
+
+            console.log('Insert result:', { insertResult, insertError });
 
             if (insertError) {
               console.error('Failed to create balance record:', insertError);
@@ -726,7 +745,9 @@ exports.handler = async (event, context) => {
             currentBalance = existingBalance.balance || 0;
             newBalance = currentBalance + usdAmount;
             
-            const { data: updateResult, error: updateError } = await supabase
+            console.log('Updating existing balance:', { currentBalance, usdAmount, newBalance });
+            
+            const { data: updateResult, error: updateError } = await userSupabase
               .from('user_balances')
               .update({ 
                 balance: newBalance,
@@ -736,6 +757,8 @@ exports.handler = async (event, context) => {
               .eq('currency', 'USD')
               .select('balance')
               .single();
+
+            console.log('Update result:', { updateResult, updateError });
 
             if (updateError) {
               console.error('Failed to update balance:', updateError);
@@ -752,7 +775,10 @@ exports.handler = async (event, context) => {
           };
           
         } catch (error) {
-          console.error('Database credit failed:', error);
+          console.error('Database credit failed with detailed error:', error);
+          console.error('Error stack:', error.stack);
+          console.error('Error message:', error.message);
+          console.error('Error code:', error.code);
           creditInfo = { 
             success: false, 
             new_balance: 0, 
