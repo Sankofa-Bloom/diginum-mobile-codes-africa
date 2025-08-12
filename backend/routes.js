@@ -2783,7 +2783,7 @@ export default async function routes(fastify, opts) {
 
         if (insertError) {
           fastify.log.error('Failed to create balance record:', insertError);
-          return;
+          return { success: false, error: insertError.message, newBalance: 0 };
         }
         
         newBalance = insertResult.balance;
@@ -2791,7 +2791,7 @@ export default async function routes(fastify, opts) {
       } else if (balanceError) {
         // Other database error
         fastify.log.error('Error fetching existing balance:', balanceError);
-        return;
+        return { success: false, error: balanceError.message, newBalance: 0 };
       } else {
         // Update existing balance
         currentBalance = parseFloat(existingBalance.balance || 0);
@@ -2808,15 +2808,17 @@ export default async function routes(fastify, opts) {
 
         if (updateError) {
           fastify.log.error('Failed to update balance:', updateError);
-          return;
+          return { success: false, error: updateError.message, newBalance: 0 };
         }
         
         fastify.log.info(`Balance updated successfully: ${newBalance} ${currency}`);
       }
 
       fastify.log.info(`User ${userId} balance credited: ${amount} ${currency}. New balance: ${newBalance}`);
+      return { success: true, newBalance, error: null };
     } catch (error) {
       fastify.log.error('Error in creditUserBalance:', error);
+      return { success: false, error: error.message, newBalance: 0 };
     }
   }
 
@@ -2833,17 +2835,26 @@ export default async function routes(fastify, opts) {
 
       if (paymentError) {
         fastify.log.error('Error fetching payment record:', paymentError);
-        return;
+        return { success: false, error: paymentError.message };
       }
 
       // Credit user balance
-      await creditUserBalance(fastify, payment.user_id, payment.amount, payment.currency);
+      const creditResult = await creditUserBalance(fastify, payment.user_id, payment.amount, payment.currency);
+      
+      if (!creditResult.success) {
+        fastify.log.error('Failed to credit user balance:', creditResult.error);
+        return { success: false, error: creditResult.error };
+      }
+
+      fastify.log.info(`Payment processed successfully. New balance: ${creditResult.newBalance}`);
+      return { success: true, newBalance: creditResult.newBalance };
 
       // Send success notification (implement as needed)
       // await sendPaymentSuccessNotification(payment);
 
     } catch (error) {
       fastify.log.error('Error handling successful payment:', error);
+      return { success: false, error: error.message };
     }
   }
 
