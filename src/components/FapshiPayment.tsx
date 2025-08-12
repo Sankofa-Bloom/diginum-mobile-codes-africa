@@ -98,7 +98,7 @@ export default function FapshiPayment({
         name: user.user_metadata?.full_name || user.email.split('@')[0], // Use user's name or email prefix
         phone: formData.phone,
         description: description,
-        redirectUrl: `${window.location.origin}/payment/success`,
+        redirect_url: `${window.location.origin}/payment/success`,
       };
 
       const response = await fapshiAPI.initiatePayment(paymentData);

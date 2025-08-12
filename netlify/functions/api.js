@@ -589,10 +589,11 @@ exports.handler = async (event, context) => {
         
         // For now, simulate successful payment initiation
         // In production, you would call the actual Fapshi API
-        console.log('Fapshi payment initiated:', { amount, currency, email, name, phone, reference: paymentReference });
+        console.log('Fapshi payment initiated:', { amount, currency, email, name, phone, reference: paymentReference, redirect_url });
         
         // Simulate payment URL (in production, this would come from Fapshi API)
         const paymentUrl = `${redirect_url || 'https://diginum.netlify.app'}?ref=${paymentReference}`;
+        console.log('Constructed payment URL:', paymentUrl);
         
         return {
           statusCode: 200,
