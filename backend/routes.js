@@ -2281,31 +2281,36 @@ export default async function routes(fastify, opts) {
 
             // If payment is completed, add funds to user account
             if (campayData.status === 'completed' && payment.status !== 'completed') {
-              const { data: user, error: userError } = await fastify.supabase
-                .from('users')
+              const { data: balanceData, error: balanceError } = await fastify.supabase
+                .from('user_balances')
                 .select('balance')
-                .eq('id', userId)
+                .eq('user_id', userId)
+                .eq('currency', 'USD')
                 .single();
 
-              if (userError) {
-                // Create user if doesn't exist
+              if (balanceError && balanceError.code === 'PGRST116') {
+                // Create new balance record if doesn't exist
                 await fastify.supabase
-                  .from('users')
+                  .from('user_balances')
                   .insert([{
-                    id: userId,
+                    user_id: userId,
                     balance: payment.amount_usd,
-                    created_at: new Date().toISOString()
+                    currency: 'USD'
                   }]);
+              } else if (balanceError) {
+                fastify.log.error('Error fetching balance:', balanceError);
               } else {
-                // Update existing user balance
-                const newBalance = (user.balance || 0) + payment.amount_usd;
+                // Update existing balance
+                const currentBalance = balanceData.balance || 0;
+                const newBalance = currentBalance + payment.amount_usd;
                 await fastify.supabase
-                  .from('users')
+                  .from('user_balances')
                   .update({ 
                     balance: newBalance,
                     updated_at: new Date().toISOString()
                   })
-                  .eq('id', userId);
+                  .eq('user_id', userId)
+                  .eq('currency', 'USD');
               }
 
               // Update payment status to completed

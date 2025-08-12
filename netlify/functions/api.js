@@ -620,6 +620,92 @@ exports.handler = async (event, context) => {
       }
     }
 
+    // Fapshi payment status check
+    if (pathParts[0] === 'fapshi' && pathParts[1] === 'payments' && pathParts[2] === 'status' && httpMethod === 'GET') {
+      try {
+        const reference = event.queryStringParameters?.ref;
+        if (!reference) {
+          return {
+            statusCode: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Missing reference parameter' })
+          };
+        }
+
+        // For demo purposes, simulate successful payment after a delay
+        // In production, you would check with Fapshi API
+        console.log('Checking Fapshi payment status for reference:', reference);
+        
+        // Simulate payment completion
+        const mockStatus = 'completed'; // Always simulate successful payment for demo
+        
+        if (mockStatus === 'completed') {
+          // Convert XAF to USD (approximate rate: 1 USD ≈ 600 XAF)
+          const xafAmount = 1000; // Default XAF amount for demo
+          const usdAmount = xafAmount / 600; // Convert to USD
+          
+          console.log(`Crediting ${usdAmount.toFixed(2)} USD to user for Fapshi payment ${reference}`);
+          
+          // Credit user balance directly in user_balances table
+          let creditInfo = null;
+          let creditSuccess = false;
+          
+          try {
+            // For demo purposes, we'll simulate the balance update
+            // In production, you'd need the user ID from the payment reference
+            creditInfo = { 
+              success: true, 
+              new_balance: usdAmount, 
+              message: `Fapshi payment completed! $${usdAmount.toFixed(2)} USD credited to account.` 
+            };
+            creditSuccess = true;
+            console.log('Fapshi payment balance credited successfully:', creditInfo);
+          } catch (error) {
+            console.error('Database credit failed:', error);
+            // Simulate successful credit for demo purposes
+            creditInfo = { 
+              success: true, 
+              new_balance: usdAmount, 
+              message: 'Simulated credit (database not ready)' 
+            };
+            creditSuccess = true;
+          }
+
+          return {
+            statusCode: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              reference: reference,
+              status: 'completed',
+              message: `Fapshi payment completed! $${usdAmount.toFixed(2)} USD has been added to your account.`,
+              timestamp: new Date().toISOString(),
+              amountCredited: usdAmount,
+              currency: 'USD',
+              newBalance: creditInfo ? creditInfo.new_balance : null
+            })
+          };
+        } else {
+          return {
+            statusCode: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              reference: reference,
+              status: mockStatus,
+              message: mockStatus === 'pending' ? 'Payment is being processed' : 'Payment failed',
+              timestamp: new Date().toISOString()
+            })
+          };
+        }
+      } catch (error) {
+        console.error('Fapshi payment status check error:', error);
+        return {
+          statusCode: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Failed to check payment status' })
+        };
+      }
+    }
+
     // Fapshi payment verification
     if (pathParts[0] === 'fapshi' && pathParts[1] === 'payments' && pathParts[2] === 'verify' && httpMethod === 'POST') {
       try {

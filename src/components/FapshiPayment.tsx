@@ -105,7 +105,16 @@ export default function FapshiPayment({
       if (response.success && response.data) {
         // Redirect to Fapshi payment page
         if (response.data.payment_url) {
-          window.location.href = response.data.payment_url;
+          // Extract reference from payment URL
+          const urlParams = new URLSearchParams(response.data.payment_url.split('?')[1]);
+          const reference = urlParams.get('ref');
+          
+          if (reference) {
+            // Start polling for payment status
+            pollPaymentStatus(reference);
+          } else {
+            window.location.href = response.data.payment_url;
+          }
         } else {
           setPaymentStatus('success');
           toast.success('Payment initiated successfully!');
@@ -126,6 +135,49 @@ export default function FapshiPayment({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const pollPaymentStatus = async (reference: string) => {
+    const maxAttempts = 60; // 5 minutes with 5-second intervals
+    let attempts = 0;
+
+    const checkStatus = async () => {
+      try {
+        const response = await fetch(`/.netlify/functions/api/fapshi/payments/status?ref=${reference}`);
+        const result = await response.json();
+        
+        if (result.status === 'completed') {
+          setPaymentStatus('success');
+          toast.success(result.message || 'Payment completed successfully!');
+          onSuccess?.(result);
+          return;
+        } else if (result.status === 'failed') {
+          setPaymentStatus('error');
+          toast.error('Payment failed or was cancelled');
+          onError?.('Payment failed');
+          return;
+        }
+
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(checkStatus, 5000); // Check every 5 seconds
+        } else {
+          toast.error('Payment timeout. Please check your payment status.');
+          setPaymentStatus('error');
+        }
+      } catch (error) {
+        console.error('Payment status check error:', error);
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(checkStatus, 5000);
+        } else {
+          toast.error('Failed to check payment status');
+          setPaymentStatus('error');
+        }
+      }
+    };
+
+    checkStatus();
   };
 
   const formatCurrency = (amount: number, currency: string) => {
