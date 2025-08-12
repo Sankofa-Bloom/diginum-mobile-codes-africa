@@ -517,41 +517,147 @@ exports.handler = async (event, context) => {
       }
     }
 
-    // Add funds endpoint (for mobile money payments)
+    // Add funds with Campay
     if (pathParts[0] === 'add-funds' && pathParts[1] === 'campay' && httpMethod === 'POST') {
       try {
         const { amount, currency, phoneNumber, originalAmountUSD } = requestBody;
-
+        
         if (!amount || !currency || !phoneNumber) {
           return {
             statusCode: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ error: 'Amount, currency, and phone number are required' })
+            body: JSON.stringify({ error: 'Missing required fields: amount, currency, phoneNumber' })
           };
         }
 
-        // For now, simulate a successful payment initiation
-        // In a real implementation, this would integrate with Campay API
-        const mockReference = `PAY_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
+        // Generate a unique reference
+        const reference = `CAMP_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // For now, simulate successful payment initiation
+        // In production, you would call the actual Campay API
+        console.log('Campay payment initiated:', { amount, currency, phoneNumber, reference });
+        
         return {
           statusCode: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             success: true,
-            reference: mockReference,
+            reference: reference,
             message: 'Payment initiated successfully',
-            amount: amount,
-            currency: currency,
-            phoneNumber: phoneNumber
+            data: {
+              amount: amount,
+              currency: currency,
+              phoneNumber: phoneNumber,
+              reference: reference
+            }
           })
         };
       } catch (error) {
-        console.error('Add funds error:', error);
+        console.error('Campay payment error:', error);
         return {
           statusCode: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ error: 'Failed to process payment' })
+          body: JSON.stringify({ error: 'Internal server error' })
+        };
+      }
+    }
+
+    // Fapshi payment endpoints
+    if (pathParts[0] === 'fapshi' && pathParts[1] === 'payments' && pathParts[2] === 'initialize' && httpMethod === 'POST') {
+      try {
+        const { amount, currency, email, name, phone, redirect_url, description, reference } = requestBody;
+        
+        if (!amount || !currency || !email || !name) {
+          return {
+            statusCode: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Missing required fields: amount, currency, email, name' })
+          };
+        }
+
+        // Validate currency
+        if (currency !== 'XAF') {
+          return {
+            statusCode: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Fapshi only supports XAF currency' })
+          };
+        }
+
+        // Generate a unique reference if not provided
+        const paymentReference = reference || `FAPSHI_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // For now, simulate successful payment initiation
+        // In production, you would call the actual Fapshi API
+        console.log('Fapshi payment initiated:', { amount, currency, email, name, phone, reference: paymentReference });
+        
+        // Simulate payment URL (in production, this would come from Fapshi API)
+        const paymentUrl = `${redirect_url || 'https://diginum.netlify.app'}/payment/processing?ref=${paymentReference}`;
+        
+        return {
+          statusCode: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: true,
+            data: {
+              transaction_id: paymentReference,
+              reference: paymentReference,
+              amount: amount,
+              currency: currency,
+              status: 'pending',
+              payment_url: paymentUrl,
+              message: 'Payment initiated successfully'
+            }
+          })
+        };
+      } catch (error) {
+        console.error('Fapshi payment error:', error);
+        return {
+          statusCode: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Internal server error' })
+        };
+      }
+    }
+
+    // Fapshi payment verification
+    if (pathParts[0] === 'fapshi' && pathParts[1] === 'payments' && pathParts[2] === 'verify' && httpMethod === 'POST') {
+      try {
+        const { transaction_id } = requestBody;
+        
+        if (!transaction_id) {
+          return {
+            statusCode: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Missing transaction_id' })
+          };
+        }
+
+        // For now, simulate payment verification
+        // In production, you would call the actual Fapshi API
+        console.log('Fapshi payment verification:', { transaction_id });
+        
+        return {
+          statusCode: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: true,
+            data: {
+              transaction_id: transaction_id,
+              reference: transaction_id,
+              amount: 1000, // Mock amount
+              currency: 'XAF',
+              status: 'success',
+              message: 'Payment verified successfully'
+            }
+          })
+        };
+      } catch (error) {
+        console.error('Fapshi verification error:', error);
+        return {
+          statusCode: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Internal server error' })
         };
       }
     }

@@ -67,12 +67,11 @@ class FapshiAPI {
    */
   async initiatePayment(paymentData: FapshiPaymentRequest): Promise<FapshiPaymentResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/payments/initialize`, {
+      // Use local Netlify Functions API instead of external Fapshi API
+      const response = await fetch('/.netlify/functions/api/fapshi/payments/initialize', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.config.secretKey}`,
-          'X-Public-Key': this.config.publicKey,
         },
         body: JSON.stringify({
           amount: paymentData.amount,
@@ -121,12 +120,13 @@ class FapshiAPI {
    */
   async verifyPayment(transactionId: string): Promise<FapshiPaymentResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/payments/${transactionId}/verify`, {
-        method: 'GET',
+      // Use local Netlify Functions API instead of external Fapshi API
+      const response = await fetch('/.netlify/functions/api/fapshi/payments/verify', {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.config.secretKey}`,
-          'X-Public-Key': this.config.publicKey,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ transaction_id: transactionId }),
       });
 
       const result = await response.json();
