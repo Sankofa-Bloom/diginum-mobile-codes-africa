@@ -49,8 +49,8 @@ exports.handler = async (event, context) => {
         currency: currency || 'USD',
         reference: reference,
         description: description || 'DigiNum Add Funds',
-        callback_url: `${process.env.URL}/payment/callback`,
-        return_url: `${process.env.URL}/payment/success`
+        callback_url: `${process.env.FRONTEND_URL}/.netlify/functions/fapshi-webhook`,
+        return_url: `${process.env.FRONTEND_URL}/payment/success`
       }),
     });
 

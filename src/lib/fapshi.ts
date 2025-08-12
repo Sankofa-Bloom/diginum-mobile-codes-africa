@@ -68,7 +68,7 @@ class FapshiAPI {
   async initiatePayment(paymentData: FapshiPaymentRequest): Promise<FapshiPaymentResponse> {
     try {
       // Use local Netlify Functions API instead of external Fapshi API
-      const response = await fetch('/.netlify/functions/api/fapshi/payments/initialize', {
+      const response = await fetch('/.netlify/functions/fapshi-initialize', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

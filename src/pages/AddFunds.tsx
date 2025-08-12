@@ -74,7 +74,7 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
       }
 
       // Initialize Fapshi payment
-      const fapshiResponse = await fetch('/.netlify/functions/api/fapshi/initialize', {
+      const fapshiResponse = await fetch('/.netlify/functions/fapshi-initialize', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -134,7 +134,7 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
       const payment = payments[0];
       
       // Check payment status with Fapshi
-      const statusResponse = await fetch(`/.netlify/functions/api/fapshi/status?reference=${payment.reference}`);
+      const statusResponse = await fetch(`/.netlify/functions/fapshi-status?reference=${payment.reference}`);
       
       if (statusResponse.ok) {
         const statusData = await statusResponse.json();
