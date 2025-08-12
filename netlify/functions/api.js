@@ -622,6 +622,43 @@ exports.handler = async (event, context) => {
       }
     }
 
+    // Test database connection endpoint
+    if (pathParts[0] === 'test' && pathParts[1] === 'db' && httpMethod === 'GET') {
+      try {
+        console.log('=== TESTING DATABASE CONNECTION ===');
+        
+        // Test basic Supabase connection
+        const { data: testData, error: testError } = await supabase
+          .from('user_balances')
+          .select('*')
+          .limit(1);
+        
+        console.log('Database test result:', { testData, testError });
+        
+        return {
+          statusCode: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: true,
+            message: 'Database connection test completed',
+            testData,
+            testError: testError ? {
+              code: testError.code,
+              message: testError.message,
+              details: testError.details
+            } : null
+          })
+        };
+      } catch (error) {
+        console.error('Database test error:', error);
+        return {
+          statusCode: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Database test failed', details: error.message })
+        };
+      }
+    }
+
     // Fapshi payment completion endpoint (for demo purposes)
     if (pathParts[0] === 'fapshi' && pathParts[1] === 'payments' && pathParts[2] === 'complete' && httpMethod === 'POST') {
       console.log('=== FAPSHI PAYMENT COMPLETION ENDPOINT START ===');
