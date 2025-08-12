@@ -61,6 +61,7 @@ const fallbackRates = [
 ];
 
 exports.handler = async (event, context) => {
+  console.log('=== NETLIFY FUNCTION HANDLER START ===');
   const { httpMethod, path, queryStringParameters, headers, body } = event;
   
   console.log('Netlify Function Event:', { 
@@ -623,6 +624,7 @@ exports.handler = async (event, context) => {
 
     // Fapshi payment completion endpoint (for demo purposes)
     if (pathParts[0] === 'fapshi' && pathParts[1] === 'payments' && pathParts[2] === 'complete' && httpMethod === 'POST') {
+      console.log('=== FAPSHI PAYMENT COMPLETION ENDPOINT START ===');
       try {
         console.log('Fapshi payment completion endpoint called');
         console.log('Request body:', requestBody);
@@ -804,6 +806,7 @@ exports.handler = async (event, context) => {
 
         console.log('Returning credit info:', creditInfo);
 
+        console.log('=== RETURNING SUCCESS RESPONSE ===');
         return {
           statusCode: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -820,6 +823,7 @@ exports.handler = async (event, context) => {
         };
         
       } catch (error) {
+        console.error('=== FAPSHI PAYMENT COMPLETION ERROR ===');
         console.error('Fapshi payment completion error:', error);
         return {
           statusCode: 500,
@@ -827,6 +831,7 @@ exports.handler = async (event, context) => {
           body: JSON.stringify({ error: 'Failed to complete payment' })
         };
       }
+      console.log('=== FAPSHI PAYMENT COMPLETION ENDPOINT END ===');
     }
 
     // Fapshi payment status check
