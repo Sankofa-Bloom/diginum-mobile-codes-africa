@@ -700,6 +700,16 @@ exports.handler = async (event, context) => {
         
         try {
           console.log('Starting database balance update for user:', userId);
+          console.log('User ID type:', typeof userId, 'Value:', userId);
+          
+          // Check if the table exists and get its structure
+          console.log('Checking table structure...');
+          const { data: tableInfo, error: tableError } = await userSupabase
+            .from('user_balances')
+            .select('*')
+            .limit(1);
+          
+          console.log('Table structure check:', { tableInfo, tableError });
           
           // First, try to get existing balance
           const { data: existingBalance, error: balanceError } = await userSupabase
@@ -710,6 +720,12 @@ exports.handler = async (event, context) => {
             .single();
 
           console.log('Balance query result:', { existingBalance, balanceError });
+          console.log('Balance error details:', {
+            code: balanceError?.code,
+            message: balanceError?.message,
+            details: balanceError?.details,
+            hint: balanceError?.hint
+          });
 
           let currentBalance = 0;
           let newBalance = usdAmount;
