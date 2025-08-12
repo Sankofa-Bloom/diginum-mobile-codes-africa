@@ -10,7 +10,7 @@ import { Loader2, Phone, MessageSquare, CheckCircle, Clock, AlertTriangle, Dolla
 import { getCurrentUser } from '@/lib/auth';
 import apiClient from '@/lib/apiClient';
 import CountdownTimer from '@/components/CountdownTimer';
-import AddFundsModal from '@/components/AddFundsModal';
+
 
 interface Country {
   id: string;
@@ -489,16 +489,15 @@ const BuyPage = () => {
               </div>
             )}
           </div>
-          <AddFundsModal 
-            currentBalance={accountBalance}
-            onFundsAdded={setAccountBalance}
-            trigger={
-              <Button variant="outline" size="sm" className="gap-2">
-                <DollarSign className="h-4 w-4" />
-                Add Funds
-              </Button>
-            }
-          />
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="gap-2"
+            onClick={() => navigate('/add-funds')}
+          >
+            <DollarSign className="h-4 w-4" />
+            Add Funds
+          </Button>
         </div>
       </div>
 
@@ -664,10 +663,14 @@ const BuyPage = () => {
                 Back to Countries
               </Button>
               {services.length > 0 && accountBalance < Math.min(...services.map(s => s.price)) && (
-                <AddFundsModal 
-                  currentBalance={accountBalance}
-                  onFundsAdded={setAccountBalance}
-                />
+                <Button 
+                  variant="outline"
+                  onClick={() => navigate('/add-funds')}
+                  className="gap-2"
+                >
+                  <DollarSign className="h-4 w-4" />
+                  Add Funds
+                </Button>
               )}
             </div>
           </CardContent>
