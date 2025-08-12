@@ -1902,35 +1902,39 @@ export default async function routes(fastify, opts) {
     try {
       const userId = request.user.sub;
 
-      // Get user's current balance
-      const { data: user, error: userError } = await fastify.supabase
-        .from('users')
+      // Get user's current balance from user_balances table
+      const { data: balanceData, error: balanceError } = await fastify.supabase
+        .from('user_balances')
         .select('balance')
-        .eq('id', userId)
+        .eq('user_id', userId)
+        .eq('currency', 'USD')
         .single();
 
-      if (userError) {
-        // If user doesn't exist, create with default balance
-        const { data: newUser, error: createError } = await fastify.supabase
-          .from('users')
+      if (balanceError && balanceError.code === 'PGRST116') {
+        // No balance record exists, create one with $0
+        const { data: newBalance, error: createError } = await fastify.supabase
+          .from('user_balances')
           .insert([{
-            id: userId,
+            user_id: userId,
             balance: 0,
-            created_at: new Date().toISOString()
+            currency: 'USD'
           }])
           .select('balance')
           .single();
 
         if (createError) {
-          fastify.log.error('Error creating user:', createError);
+          fastify.log.error('Error creating balance record:', createError);
           // Return a default balance instead of failing
           return reply.code(200).send({ balance: 0 });
         }
 
-        return reply.code(200).send({ balance: newUser.balance });
+        return reply.code(200).send({ balance: newBalance.balance });
+      } else if (balanceError) {
+        fastify.log.error('Error fetching balance:', balanceError);
+        return reply.code(200).send({ balance: 0 });
       }
 
-      return reply.code(200).send({ balance: user.balance || 0 });
+      return reply.code(200).send({ balance: balanceData.balance || 0 });
     } catch (error) {
       fastify.log.error('Error getting account balance:', error);
       // Return a default balance instead of failing
@@ -2346,45 +2350,51 @@ export default async function routes(fastify, opts) {
         return reply.code(400).send({ error: 'Invalid amount' });
       }
 
-      // Get current balance
-      const { data: user, error: userError } = await fastify.supabase
-        .from('users')
+      // Get current balance from user_balances table
+      const { data: balanceData, error: balanceError } = await fastify.supabase
+        .from('user_balances')
         .select('balance')
-        .eq('id', userId)
+        .eq('user_id', userId)
+        .eq('currency', 'USD')
         .single();
 
-      if (userError) {
-        // Create user if doesn't exist
-        const { data: newUser, error: createError } = await fastify.supabase
-          .from('users')
+      if (balanceError && balanceError.code === 'PGRST116') {
+        // Create new balance record if doesn't exist
+        const { data: newBalance, error: createError } = await fastify.supabase
+          .from('user_balances')
           .insert([{
-            id: userId,
+            user_id: userId,
             balance: amount,
-            created_at: new Date().toISOString()
+            currency: 'USD'
           }])
           .select('balance')
           .single();
 
         if (createError) {
-          fastify.log.error('Error creating user:', createError);
+          fastify.log.error('Error creating balance record:', createError);
           return reply.code(500).send({ error: 'Failed to add funds' });
         }
 
         return reply.code(200).send({ 
-          balance: newUser.balance,
+          balance: newBalance.balance,
           message: 'Funds added successfully'
         });
+      } else if (balanceError) {
+        fastify.log.error('Error fetching balance:', balanceError);
+        return reply.code(500).send({ error: 'Failed to fetch balance' });
       }
 
-      // Update balance
-      const newBalance = (user.balance || 0) + amount;
-      const { data: updatedUser, error: updateError } = await fastify.supabase
-        .from('users')
+      // Update existing balance
+      const currentBalance = balanceData.balance || 0;
+      const newBalance = currentBalance + amount;
+      const { data: updatedBalance, error: updateError } = await fastify.supabase
+        .from('user_balances')
         .update({ 
           balance: newBalance,
           updated_at: new Date().toISOString()
         })
-        .eq('id', userId)
+        .eq('user_id', userId)
+        .eq('currency', 'USD')
         .select('balance')
         .single();
 
@@ -2394,7 +2404,7 @@ export default async function routes(fastify, opts) {
       }
 
       return reply.code(200).send({ 
-        balance: updatedUser.balance,
+        balance: updatedBalance.balance,
         message: 'Funds added successfully'
       });
     } catch (error) {
@@ -2405,47 +2415,50 @@ export default async function routes(fastify, opts) {
 
   // Check if user has sufficient balance
   const checkBalance = async (userId, requiredAmount) => {
-    const { data: user, error } = await fastify.supabase
-      .from('users')
+    const { data: balanceData, error } = await fastify.supabase
+      .from('user_balances')
       .select('balance')
-      .eq('id', userId)
+      .eq('user_id', userId)
+      .eq('currency', 'USD')
       .single();
 
-    if (error || !user) {
+    if (error || !balanceData) {
       return { hasBalance: false, currentBalance: 0 };
     }
 
     return { 
-      hasBalance: (user.balance || 0) >= requiredAmount, 
-      currentBalance: user.balance || 0 
+      hasBalance: (balanceData.balance || 0) >= requiredAmount, 
+      currentBalance: balanceData.balance || 0 
     };
   };
 
   // Deduct amount from user balance
   const deductBalance = async (userId, amount) => {
-    const { data: user, error: userError } = await fastify.supabase
-      .from('users')
+    const { data: balanceData, error: balanceError } = await fastify.supabase
+      .from('user_balances')
       .select('balance')
-      .eq('id', userId)
+      .eq('user_id', userId)
+      .eq('currency', 'USD')
       .single();
 
-    if (userError) {
-      return { success: false, error: 'User not found' };
+    if (balanceError) {
+      return { success: false, error: 'Balance record not found' };
     }
 
-    const currentBalance = user.balance || 0;
+    const currentBalance = balanceData.balance || 0;
     if (currentBalance < amount) {
       return { success: false, error: 'Insufficient balance' };
     }
 
     const newBalance = currentBalance - amount;
     const { error: updateError } = await fastify.supabase
-      .from('users')
+      .from('user_balances')
       .update({ 
         balance: newBalance,
         updated_at: new Date().toISOString()
       })
-      .eq('id', userId);
+      .eq('user_id', userId)
+      .eq('currency', 'USD');
 
     if (updateError) {
       return { success: false, error: 'Failed to update balance' };
@@ -2739,29 +2752,61 @@ export default async function routes(fastify, opts) {
   // Fapshi Payment Helper Functions
   async function creditUserBalance(fastify, userId, amount, currency) {
     try {
-      // Credit the user's balance
-      const { data: user, error: fetchError } = await fastify.supabase
-        .from('users')
+      // Credit the user's balance in user_balances table
+      const { data: existingBalance, error: balanceError } = await fastify.supabase
+        .from('user_balances')
         .select('balance')
-        .eq('id', userId)
+        .eq('user_id', userId)
+        .eq('currency', currency)
         .single();
 
-      if (fetchError) {
-        fastify.log.error('Error fetching user balance:', fetchError);
+      let currentBalance = 0;
+      let newBalance = amount;
+
+      if (balanceError && balanceError.code === 'PGRST116') {
+        // No existing balance record, create new one
+        fastify.log.info(`Creating new balance record for user ${userId} with ${amount} ${currency}`);
+        const { data: insertResult, error: insertError } = await fastify.supabase
+          .from('user_balances')
+          .insert([{
+            user_id: userId,
+            balance: amount,
+            currency: currency
+          }])
+          .select('balance')
+          .single();
+
+        if (insertError) {
+          fastify.log.error('Failed to create balance record:', insertError);
+          return;
+        }
+        
+        newBalance = insertResult.balance;
+        fastify.log.info(`New balance record created: ${newBalance} ${currency}`);
+      } else if (balanceError) {
+        // Other database error
+        fastify.log.error('Error fetching existing balance:', balanceError);
         return;
-      }
+      } else {
+        // Update existing balance
+        currentBalance = parseFloat(existingBalance.balance || 0);
+        newBalance = currentBalance + amount;
+        
+        const { error: updateError } = await fastify.supabase
+          .from('user_balances')
+          .update({ 
+            balance: newBalance,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', userId)
+          .eq('currency', currency);
 
-      const currentBalance = parseFloat(user.balance || 0);
-      const newBalance = currentBalance + amount;
-
-      const { error: updateError } = await fastify.supabase
-        .from('users')
-        .update({ balance: newBalance })
-        .eq('id', userId);
-
-      if (updateError) {
-        fastify.log.error('Error updating user balance:', updateError);
-        return;
+        if (updateError) {
+          fastify.log.error('Failed to update balance:', updateError);
+          return;
+        }
+        
+        fastify.log.info(`Balance updated successfully: ${newBalance} ${currency}`);
       }
 
       fastify.log.info(`User ${userId} balance credited: ${amount} ${currency}. New balance: ${newBalance}`);

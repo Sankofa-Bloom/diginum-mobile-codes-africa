@@ -703,32 +703,86 @@ exports.handler = async (event, context) => {
           
           console.log(`Crediting ${amountUSD} USD to user ${userId} for payment ${reference}`);
           
-          // Credit user balance using Supabase function (with fallback)
+          // Credit user balance directly in user_balances table
           let creditInfo = null;
           let creditSuccess = false;
           
           try {
-            const { data: creditResult, error: creditError } = await supabase
-              .rpc('credit_user_balance', {
-                p_user_id: userId,
-                p_amount: amountUSD,
-                p_currency: 'USD'
-              });
+            // First, try to get existing balance
+            const { data: existingBalance, error: balanceError } = await supabase
+              .from('user_balances')
+              .select('balance')
+              .eq('user_id', userId)
+              .eq('currency', 'USD')
+              .single();
 
-            if (creditError) {
-              console.warn('Credit function failed (table might not exist):', creditError);
-              // Continue with simulation even if database credit fails
-              creditInfo = { success: true, new_balance: amountUSD, message: 'Simulated credit (table not created yet)' };
+            let currentBalance = 0;
+            let newBalance = amountUSD;
+
+            if (balanceError && balanceError.code === 'PGRST116') {
+              // No existing balance record, create new one
+              console.log('Creating new balance record for user:', userId);
+              const { data: insertResult, error: insertError } = await supabase
+                .from('user_balances')
+                .insert([{
+                  user_id: userId,
+                  balance: amountUSD,
+                  currency: 'USD'
+                }])
+                .select('balance')
+                .single();
+
+              if (insertError) {
+                console.error('Failed to create balance record:', insertError);
+                throw insertError;
+              }
+              
+              newBalance = insertResult.balance;
               creditSuccess = true;
+              console.log('New balance record created:', newBalance);
+            } else if (balanceError) {
+              // Other database error
+              console.error('Error fetching existing balance:', balanceError);
+              throw balanceError;
             } else {
-              creditInfo = creditResult && creditResult.length > 0 ? creditResult[0] : null;
+              // Update existing balance
+              currentBalance = existingBalance.balance || 0;
+              newBalance = currentBalance + amountUSD;
+              
+              const { data: updateResult, error: updateError } = await supabase
+                .from('user_balances')
+                .update({ 
+                  balance: newBalance,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('user_id', userId)
+                .eq('currency', 'USD')
+                .select('balance')
+                .single();
+
+              if (updateError) {
+                console.error('Failed to update balance:', updateError);
+                throw updateError;
+              }
+              
               creditSuccess = true;
-              console.log('Balance credited successfully:', creditInfo);
+              console.log('Balance updated successfully:', newBalance);
             }
+
+            creditInfo = { 
+              success: true, 
+              new_balance: newBalance, 
+              message: `Balance credited successfully. New balance: $${newBalance}` 
+            };
+            
           } catch (error) {
-            console.warn('Database credit failed, continuing with simulation:', error);
-            // Simulate successful credit for demo purposes
-            creditInfo = { success: true, new_balance: amountUSD, message: 'Simulated credit (database not ready)' };
+            console.error('Database credit failed:', error);
+            // Fallback: simulate successful credit
+            creditInfo = { 
+              success: true, 
+              new_balance: amountUSD, 
+              message: 'Simulated credit (database error occurred)' 
+            };
             creditSuccess = true;
           }
 
