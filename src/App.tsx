@@ -9,7 +9,7 @@ import { CurrencyProvider } from "./contexts/CurrencyContext";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import BuyPage from "./pages/BuyPage";
-import Payment from "./pages/Payment";
+import AddFunds from "./pages/AddFunds";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
@@ -105,10 +105,10 @@ function AppRoutes() {
           } 
         />
         <Route 
-          path="payment" 
+          path="add-funds" 
           element={
             <ProtectedRoute>
-              <Payment />
+              <AddFunds />
             </ProtectedRoute>
           } 
         />

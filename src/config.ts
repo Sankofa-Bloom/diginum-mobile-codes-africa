@@ -34,8 +34,7 @@ if (import.meta.env.DEV) {
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Stripe configuration (public key only)
-export const STRIPE_PUBLIC_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+
 
 // Note: All sensitive credentials are handled by the backend API
 // Do not expose any secret keys, service role keys, or API secrets here

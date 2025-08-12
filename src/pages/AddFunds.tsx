@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { supabase } from '@/lib/supabaseClient';
+import LanguageToggle from '@/components/LanguageToggle';
 
 interface AddFundsProps {
   onFundsAdded?: (newBalance: number) => void;
@@ -17,6 +20,18 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
   const { user } = useCurrentUser();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Check if this is an order-based payment
+  const orderData = location.state;
+  const isOrderPayment = orderData?.orderId;
+
+  useEffect(() => {
+    if (isOrderPayment && orderData?.amount) {
+      setAmount(orderData.amount.toString());
+    }
+  }, [isOrderPayment, orderData]);
 
   const handleAddFunds = async () => {
     if (!user) {
@@ -68,7 +83,9 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
           amount: numAmount,
           currency: 'USD',
           reference: reference,
-          description: `Add funds to DigiNum account - $${numAmount} USD`
+          description: isOrderPayment 
+            ? `Payment for ${orderData.serviceTitle} - $${numAmount} USD`
+            : `Add funds to DigiNum account - $${numAmount} USD`
         }),
       });
 
@@ -173,6 +190,15 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
             title: "Payment Successful!",
             description: `$${payment.amount} has been added to your account.`,
           });
+
+          // If this was an order payment, redirect to dashboard
+          if (isOrderPayment) {
+            navigate('/dashboard', { 
+              state: { 
+                message: `Payment successful! Your order for ${orderData.serviceTitle} is being processed.` 
+              } 
+            });
+          }
         }
       }
     } catch (error) {
@@ -181,49 +207,96 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle>Add Funds</CardTitle>
-        <CardDescription>
-          Add funds to your DigiNum account using Fapshi
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="amount">Amount (USD)</Label>
-          <Input
-            id="amount"
-            type="number"
-            placeholder="Enter amount"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            min="1"
-            step="0.01"
-          />
-        </div>
-        
-        <div className="text-sm text-muted-foreground">
-          Current Balance: ${currentBalance.toFixed(2)}
+    <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center space-x-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(-1)}
+              className="flex items-center space-x-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Back</span>
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {isOrderPayment ? 'Complete Payment' : 'Add Funds'}
+              </h1>
+              <p className="text-gray-600">
+                {isOrderPayment 
+                  ? `Complete your payment for ${orderData.serviceTitle}`
+                  : 'Add funds to your DigiNum account using Fapshi'
+                }
+              </p>
+            </div>
+          </div>
+          <LanguageToggle />
         </div>
 
-        <div className="flex space-x-2">
-          <Button 
-            onClick={handleAddFunds} 
-            disabled={isProcessing || !amount}
-            className="flex-1"
-          >
-            {isProcessing ? 'Processing...' : 'Add Funds'}
-          </Button>
-          
-          <Button 
-            onClick={handleCheckPayment} 
-            variant="outline"
-            disabled={isProcessing}
-          >
-            Check Status
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        {/* Payment Card */}
+        <Card className="w-full max-w-md mx-auto">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <CreditCard className="h-5 w-5" />
+              <span>{isOrderPayment ? 'Order Payment' : 'Add Funds'}</span>
+            </CardTitle>
+            <CardDescription>
+              {isOrderPayment 
+                ? `Pay $${orderData.amount} for ${orderData.serviceTitle}`
+                : 'Add funds to your DigiNum account using Fapshi'
+              }
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="amount">Amount (USD)</Label>
+              <Input
+                id="amount"
+                type="number"
+                placeholder="Enter amount"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                min="1"
+                step="0.01"
+                disabled={isOrderPayment}
+              />
+            </div>
+            
+            {!isOrderPayment && (
+              <div className="text-sm text-muted-foreground">
+                Current Balance: ${currentBalance.toFixed(2)}
+              </div>
+            )}
+
+            <div className="flex space-x-2">
+              <Button 
+                onClick={handleAddFunds} 
+                disabled={isProcessing || !amount}
+                className="flex-1"
+              >
+                {isProcessing ? 'Processing...' : (isOrderPayment ? 'Pay Now' : 'Add Funds')}
+              </Button>
+              
+              <Button 
+                onClick={handleCheckPayment} 
+                variant="outline"
+                disabled={isProcessing}
+              >
+                Check Status
+              </Button>
+            </div>
+
+            {isOrderPayment && (
+              <div className="text-xs text-muted-foreground text-center">
+                After payment, your order will be automatically processed.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }

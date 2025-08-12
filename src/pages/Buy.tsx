@@ -44,7 +44,13 @@ function BuyButton({
       });
 
       toast.success('Order created successfully!');
-      navigate(`/payment?orderId=${response.id}`);
+      navigate('/add-funds', { 
+        state: { 
+          orderId: response.id,
+          amount: price,
+          serviceTitle: serviceTitle
+        }
+      });
     } catch (error: any) {
       console.error('Error creating order:', error);
       toast.error(error.message || 'Failed to create order');

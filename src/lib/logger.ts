@@ -42,20 +42,4 @@ export const logPaymentError = (type: string, error: any, data: any = {}) => {
   });
 };
 
-export const logStripeEvent = (type: string, event: any) => {
-  logger.info(`Stripe Event - ${type}`, {
-    eventId: event.id,
-    eventType: event.type,
-    data: event.data,
-    timestamp: event.created * 1000, // Stripe timestamps are in seconds
-    environment: process.env.NODE_ENV,
-  });
-};
 
-export const logStripeWebhook = (type: string, data: any) => {
-  logger.info(`Stripe Webhook - ${type}`, {
-    ...data,
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV,
-  });
-};
