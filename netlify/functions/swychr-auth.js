@@ -1,10 +1,27 @@
 const fetch = require('node-fetch');
 
+// Helper function to send CORS headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
+};
+
 exports.handler = async (event, context) => {
+  // Handle CORS preflight
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: corsHeaders,
+      body: ''
+    };
+  }
+
   // Only allow POST requests
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
+      headers: corsHeaders,
       body: JSON.stringify({ error: 'Method not allowed' }),
     };
   }
@@ -15,6 +32,7 @@ exports.handler = async (event, context) => {
     if (!email || !password) {
       return {
         statusCode: 400,
+        headers: corsHeaders,
         body: JSON.stringify({ error: 'Email and password are required' }),
       };
     }
@@ -28,6 +46,7 @@ exports.handler = async (event, context) => {
       console.error('Swychr credentials not configured');
       return {
         statusCode: 500,
+        headers: corsHeaders,
         body: JSON.stringify({ error: 'Payment gateway not configured' }),
       };
     }
@@ -58,6 +77,7 @@ exports.handler = async (event, context) => {
     return {
       statusCode: 200,
       headers: {
+        ...corsHeaders,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -72,6 +92,7 @@ exports.handler = async (event, context) => {
     
     return {
       statusCode: 500,
+      headers: corsHeaders,
       body: JSON.stringify({
         error: 'Authentication failed',
         message: error.message,

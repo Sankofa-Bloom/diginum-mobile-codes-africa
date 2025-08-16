@@ -61,8 +61,8 @@
   SUPABASE_JWT_SECRET = "Y1p0iIKXbD9LZngmeH6ovLPG61izKj2s8q2g9hQFK34it0uHzIA5o5TNRxTWWyPkx/c7DT4PDwNZqJ6rwolOKg=="
   
   # Swychr Payment Gateway
-  SWYCHR_EMAIL = "your-swychr-email@example.com"
-  SWYCHR_PASSWORD = "your-swychr-password"
+  SWYCHR_EMAIL = ""
+  SWYCHR_PASSWORD = ""
   SWYCHR_BASE_URL = "https://api.accountpe.com/api/payin"
   
   # Stripe
@@ -85,6 +85,7 @@
   
   # Other
   PORT = "8888"
+  TEST_MODE = "true"
 
 # API redirects to Netlify Functions (must come first)
 [[redirects]]

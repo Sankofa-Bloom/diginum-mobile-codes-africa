@@ -115,6 +115,53 @@ exports.handler = async (event, context) => {
       isRedirected: !!event.pathParameters?.splat
     });
 
+    // Test endpoint
+    if (endpoint === 'test' && httpMethod === 'GET') {
+      console.log('Test endpoint called');
+      return {
+        statusCode: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          success: true,
+          message: 'Test endpoint is working',
+          timestamp: new Date().toISOString(),
+          environment: process.env.NODE_ENV || 'unknown',
+          test_mode: process.env.TEST_MODE || 'false'
+        })
+      };
+    }
+
+    // Swychr test endpoint
+    if (endpoint === 'swychr-test' && httpMethod === 'POST') {
+      console.log('Swychr test endpoint called');
+      try {
+        const requestBody = parseBody(body, headers['content-type']);
+        console.log('Swychr test request body:', requestBody);
+        
+        return {
+          statusCode: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: true,
+            message: 'Swychr test endpoint is working',
+            timestamp: new Date().toISOString(),
+            environment: process.env.NODE_ENV || 'unknown',
+            test_mode: process.env.TEST_MODE || 'false',
+            received_data: requestBody
+          })
+        };
+      } catch (error) {
+        return {
+          statusCode: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: 'Swychr test endpoint error',
+            message: error.message
+          })
+        };
+      }
+    }
+
     // Exchange rates endpoint
     if (endpoint === 'exchange-rates' && httpMethod === 'GET') {
       console.log('Using fallback exchange rates with VAT');

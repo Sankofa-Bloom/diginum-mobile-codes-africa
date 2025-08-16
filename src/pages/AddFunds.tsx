@@ -382,6 +382,9 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
         // Credit user balance
         await creditUserBalance(user.id, paymentData.amount);
 
+        // Store the payment time for balance refresh detection
+        localStorage.setItem('lastPaymentTime', Date.now().toString());
+
         toast({
           title: "Payment Successful!",
           description: `$${paymentData.amount} has been added to your account.`,
@@ -434,7 +437,13 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate(-1)}
+              onClick={() => {
+                        // Store payment success in localStorage for balance refresh
+        localStorage.setItem('lastPaymentTime', Date.now().toString());
+        localStorage.setItem('paymentSuccess', 'true');
+        localStorage.setItem('shouldRefreshBalance', 'true');
+        navigate(-1);
+              }}
               className="flex items-center space-x-2"
             >
               <ArrowLeft className="h-4 w-4" />
