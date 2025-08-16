@@ -27,6 +27,15 @@ exports.handler = async (event, context) => {
   }
 
   try {
+    console.log('=== SWYCHR CREATE PAYMENT FUNCTION START ===');
+    console.log('Environment variables:', {
+      NODE_ENV: process.env.NODE_ENV,
+      TEST_MODE: process.env.TEST_MODE,
+      SWYCHR_EMAIL: process.env.SWYCHR_EMAIL ? 'SET' : 'NOT_SET',
+      SWYCHR_PASSWORD: process.env.SWYCHR_PASSWORD ? 'SET' : 'NOT_SET',
+      SWYCHR_BASE_URL: process.env.SWYCHR_BASE_URL
+    });
+    
     console.log('Swychr create payment function called with body:', event.body);
     
     const {
@@ -96,6 +105,7 @@ exports.handler = async (event, context) => {
         };
       }
       
+      console.error('Not in test mode and credentials not configured');
       return {
         statusCode: 500,
         headers: corsHeaders,
