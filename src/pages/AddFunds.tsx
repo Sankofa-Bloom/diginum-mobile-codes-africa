@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CreditCard } from 'lucide-react';
+import { ArrowLeft, CreditCard, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,9 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
   const [amount, setAmount] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentUserBalance, setCurrentUserBalance] = useState<number | null>(null);
+  const [paymentLink, setPaymentLink] = useState<string | null>(null);
+  const [transactionId, setTransactionId] = useState<string | null>(null);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const { toast } = useToast();
   const { user } = useCurrentUser();
   const location = useLocation();
@@ -97,7 +100,7 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
           reference: reference,
           amount: numAmount,
           currency: 'USD',
-          payment_method: 'manual',
+          payment_method: 'swychr',
           status: 'pending',
           description: isOrderPayment 
             ? `Payment for ${orderData.serviceTitle} - $${numAmount} USD`
@@ -108,68 +111,51 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
         throw new Error(`Failed to create payment record: ${paymentError.message}`);
       }
 
-      // Simulate payment processing (in real app, this would redirect to payment gateway)
-      toast({
-        title: "Payment Initiated",
-        description: `Payment of $${numAmount} USD has been initiated. Reference: ${reference}`,
+      // Create Swychr payment link
+      const paymentResponse = await fetch('/.netlify/functions/swychr-create-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          country_code: 'US', // Default to US, can be made configurable
+          name: user.full_name || user.email?.split('@')[0] || 'User',
+          email: user.email || '',
+          mobile: user.phone || '',
+          amount: numAmount,
+          transaction_id: reference,
+          description: isOrderPayment 
+            ? `Payment for ${orderData.serviceTitle}`
+            : 'Add funds to DigiNum account',
+          pass_digital_charge: false, // Set to true if you want to pass digital charges to user
+        }),
       });
 
-      // For demo purposes, simulate successful payment after 2 seconds
-      setTimeout(async () => {
-        try {
-          // Update payment status to completed
-          const { error: updateError } = await supabase
-            .from('payment_transactions')
-            .update({ status: 'completed' })
-            .eq('reference', reference);
+      if (!paymentResponse.ok) {
+        const errorData = await paymentResponse.json();
+        throw new Error(errorData.message || 'Failed to create payment link');
+      }
 
-          if (updateError) {
-            console.error('Failed to update payment status:', updateError);
-            return;
-          }
+      const paymentData = await paymentResponse.json();
 
-          // Credit user balance
-          await creditUserBalance(user.id, numAmount);
+      if (!paymentData.success) {
+        throw new Error(paymentData.message || 'Failed to create payment link');
+      }
 
-          toast({
-            title: "Payment Successful!",
-            description: `$${numAmount} has been added to your account.`,
-          });
+      // Store transaction ID and payment link
+      setTransactionId(reference);
+      setPaymentLink(paymentData.data.payment_url);
 
-          // Call the callback to update parent component
-          onFundsAdded?.(numAmount);
-
-          // Update local balance state
-          if (currentUserBalance !== null) {
-            setCurrentUserBalance(currentUserBalance + numAmount);
-          }
-
-          // Redirect to dashboard for all successful payments
-          if (isOrderPayment) {
-            navigate('/dashboard', { 
-              state: { 
-                message: `Payment successful! Your order for ${orderData.serviceTitle} is being processed.` 
-              } 
-            });
-          } else {
-            // For regular add funds, redirect to dashboard with success message
-            navigate('/dashboard', { 
-              state: { 
-                message: `$${numAmount} has been successfully added to your account!` 
-            } 
-            });
-          }
-
-        } catch (error) {
-          console.error('Payment completion error:', error);
-        }
-      }, 2000);
+      toast({
+        title: "Payment Link Created",
+        description: "Click the payment link below to complete your payment.",
+      });
 
     } catch (error) {
       console.error('Add funds error:', error);
       toast({
         title: "Payment Error",
-        description: error instanceof Error ? error.message : "Failed to process payment",
+        description: error instanceof Error ? error.message : "Failed to create payment link",
         variant: "destructive",
       });
     } finally {
@@ -308,6 +294,137 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
     }
   };
 
+  // Check Swychr payment status
+  const checkPaymentStatus = async () => {
+    if (!transactionId) return;
+
+    setIsCheckingStatus(true);
+
+    try {
+      const response = await fetch('/.netlify/functions/swychr-check-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ transaction_id: transactionId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to check payment status');
+      }
+
+      const statusData = await response.json();
+
+      if (!statusData.success) {
+        throw new Error(statusData.message || 'Failed to check payment status');
+      }
+
+      const paymentStatus = statusData.data.status;
+
+      if (paymentStatus === 'completed' || paymentStatus === 'success') {
+        // Payment successful, update database and credit user
+        await handlePaymentSuccess();
+      } else if (paymentStatus === 'pending' || paymentStatus === 'processing') {
+        toast({
+          title: "Payment Status",
+          description: "Payment is still being processed. Please wait...",
+        });
+      } else if (paymentStatus === 'failed' || paymentStatus === 'cancelled') {
+        toast({
+          title: "Payment Status",
+          description: "Payment was not successful. Please try again.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Payment Status",
+          description: `Payment status: ${paymentStatus}`,
+        });
+      }
+
+    } catch (error) {
+      console.error('Payment status check error:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to check payment status",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  };
+
+  // Handle successful payment
+  const handlePaymentSuccess = async () => {
+    if (!transactionId || !user) return;
+
+    try {
+      // Update payment status to completed
+      const { error: updateError } = await supabase
+        .from('payment_transactions')
+        .update({ status: 'completed' })
+        .eq('reference', transactionId);
+
+      if (updateError) {
+        console.error('Failed to update payment status:', updateError);
+        return;
+      }
+
+      // Get the payment amount
+      const { data: paymentData } = await supabase
+        .from('payment_transactions')
+        .select('amount')
+        .eq('reference', transactionId)
+        .single();
+
+      if (paymentData) {
+        // Credit user balance
+        await creditUserBalance(user.id, paymentData.amount);
+
+        toast({
+          title: "Payment Successful!",
+          description: `$${paymentData.amount} has been added to your account.`,
+        });
+
+        // Call the callback to update parent component
+        onFundsAdded?.(paymentData.amount);
+
+        // Update local balance state
+        if (currentUserBalance !== null) {
+          setCurrentUserBalance(currentUserBalance + paymentData.amount);
+        }
+
+        // Clear payment link and transaction ID
+        setPaymentLink(null);
+        setTransactionId(null);
+
+        // Redirect to dashboard
+        if (isOrderPayment) {
+          navigate('/dashboard', { 
+            state: { 
+              message: `Payment successful! Your order for ${orderData.serviceTitle} is being processed.` 
+            } 
+          });
+        } else {
+          navigate('/dashboard', { 
+            state: { 
+              message: `$${paymentData.amount} has been successfully added to your account!` 
+            } 
+          });
+        }
+      }
+
+    } catch (error) {
+      console.error('Payment success handling error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to process successful payment",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
@@ -381,25 +498,62 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
               </div>
             )}
 
-            <div className="flex space-x-2">
-              <Button 
-                onClick={handleAddFunds} 
-                disabled={isProcessing || !amount}
-                className="flex-1"
-              >
-                {isProcessing ? 'Processing...' : (isOrderPayment ? 'Pay Now' : 'Add Funds')}
-              </Button>
-              
-              <Button 
-                onClick={handleCheckPayment} 
-                variant="outline"
-                disabled={isProcessing}
-              >
-                Check Status
-              </Button>
-            </div>
+            {!paymentLink ? (
+              <div className="flex space-x-2">
+                <Button 
+                  onClick={handleAddFunds} 
+                  disabled={isProcessing || !amount}
+                  className="flex-1"
+                >
+                  {isProcessing ? 'Processing...' : (isOrderPayment ? 'Pay Now' : 'Add Funds')}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Payment Link */}
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <h4 className="font-medium text-blue-900 mb-2">Payment Link Created</h4>
+                  <p className="text-sm text-blue-700 mb-3">
+                    Click the button below to complete your payment securely through Swychr.
+                  </p>
+                  <Button
+                    onClick={() => window.open(paymentLink, '_blank')}
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Complete Payment
+                  </Button>
+                </div>
 
-            {isOrderPayment && (
+                {/* Status Check */}
+                <div className="flex space-x-2">
+                  <Button 
+                    onClick={checkPaymentStatus} 
+                    variant="outline"
+                    disabled={isCheckingStatus}
+                    className="flex-1"
+                  >
+                    {isCheckingStatus ? 'Checking...' : 'Check Payment Status'}
+                  </Button>
+                  
+                  <Button 
+                    onClick={() => {
+                      setPaymentLink(null);
+                      setTransactionId(null);
+                    }} 
+                    variant="ghost"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+
+                <div className="text-xs text-muted-foreground text-center">
+                  After completing payment, click "Check Payment Status" to verify and credit your account.
+                </div>
+              </div>
+            )}
+
+            {isOrderPayment && !paymentLink && (
               <div className="text-xs text-muted-foreground text-center">
                 After payment, your order will be automatically processed.
               </div>
