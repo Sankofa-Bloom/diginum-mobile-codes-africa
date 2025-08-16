@@ -2,13 +2,17 @@ import { supabase } from './supabaseClient';
 import apiClient from './apiClient';
 import { API_BASE_URL } from '@/config';
 
-export async function signup(email: string, password: string) {
+export async function signup(email: string, password: string, userData?: {
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+}) {
   try {
     if (import.meta.env.DEV) {
       console.log('Attempting signup for:', email);
     }
     
-    // Use Supabase directly for signup instead of backend API
+    // Use Supabase for authentication
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
@@ -21,6 +25,27 @@ export async function signup(email: string, password: string) {
     
     if (!data.user) {
       throw new Error('No user data returned from signup');
+    }
+
+    // Create user record in our custom users table
+    try {
+      const { error: userTableError } = await supabase
+        .from('users')
+        .insert([{
+          id: data.user.id, // Use the same ID as Supabase auth
+          email: email.trim(),
+          full_name: userData ? `${userData.first_name || ''} ${userData.last_name || ''}`.trim() : null,
+          phone: userData?.phone || null,
+        }]);
+
+      if (userTableError) {
+        console.error('Error creating user record:', userTableError);
+        // Don't fail the signup if user table insert fails
+        // The user can still authenticate, we'll just need to create the record later
+      }
+    } catch (userTableError) {
+      console.error('Error creating user record:', userTableError);
+      // Continue with signup even if user table insert fails
     }
     
     if (import.meta.env.DEV) {
@@ -126,7 +151,7 @@ export async function getCurrentUser() {
       return null;
     }
 
-    // Get the current user
+    // Get the current user from Supabase auth
     const { data: userData, error: userError } = await supabase.auth.getUser();
     
     if (userError) {
@@ -145,9 +170,62 @@ export async function getCurrentUser() {
       return null;
     }
 
-          if (import.meta.env.DEV) {
-        console.log('Current user found:', userData.user.email);
+    // Fetch additional user data from our custom users table
+    try {
+      const { data: customUserData, error: customUserError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (customUserError && customUserError.code === 'PGRST116') {
+        // User record doesn't exist in our table, create it
+        if (import.meta.env.DEV) {
+          console.log('Creating missing user record in users table');
+        }
+        
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert([{
+            id: userData.user.id,
+            email: userData.user.email,
+            full_name: null,
+            phone: null,
+          }]);
+
+        if (insertError) {
+          console.error('Error creating user record:', insertError);
+        } else {
+          // Fetch the newly created record
+          const { data: newUserData } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', userData.user.id)
+            .single();
+          
+          if (newUserData) {
+            // Merge Supabase auth data with our custom user data
+            return {
+              ...userData.user,
+              ...newUserData,
+            };
+          }
+        }
+      } else if (customUserData) {
+        // Merge Supabase auth data with our custom user data
+        return {
+          ...userData.user,
+          ...customUserData,
+        };
       }
+    } catch (customUserError) {
+      console.error('Error fetching custom user data:', customUserError);
+      // Continue with just Supabase auth data if custom table fails
+    }
+
+    if (import.meta.env.DEV) {
+      console.log('Current user found:', userData.user.email);
+    }
     return userData.user;
     
   } catch (error) {
@@ -182,4 +260,63 @@ export async function forgotPassword(email: string) {
 export async function isAuthenticated() {
   const user = await getCurrentUser();
   return user !== null;
+}
+
+// Function to update user profile in our custom users table
+export async function updateUserProfile(userId: string, updates: {
+  full_name?: string;
+  phone?: string;
+}) {
+  try {
+    if (import.meta.env.DEV) {
+      console.log('Updating user profile for:', userId);
+    }
+
+    const { error } = await supabase
+      .from('users')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('Error updating user profile:', error);
+      throw error;
+    }
+
+    if (import.meta.env.DEV) {
+      console.log('User profile updated successfully');
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to update user profile:', error);
+    throw error;
+  }
+}
+
+// Function to get user profile from our custom users table
+export async function getUserProfile(userId: string) {
+  try {
+    if (import.meta.env.DEV) {
+      console.log('Getting user profile for:', userId);
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching user profile:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Failed to get user profile:', error);
+    throw error;
+  }
 }

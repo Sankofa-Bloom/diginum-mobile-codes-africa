@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Mail, CheckCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '@/lib/apiClient';
+import { signup } from '@/lib/auth';
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -16,8 +16,7 @@ export default function SignupPage() {
     password: '',
     first_name: '',
     last_name: '',
-    phone_number: '',
-    country: ''
+    phone: ''
   });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -37,18 +36,22 @@ export default function SignupPage() {
     setSuccess(false);
     
     try {
-      const response = await apiClient.post('/auth/signup', formData);
+      // Use our new auth system that creates records in the users table
+      await signup(formData.email, formData.password, {
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        phone: formData.phone
+      });
       
-      if (response.message) {
-        setSuccess(true);
-        toast.success('Account created successfully! Please check your email to verify your account.');
-        
-        // Store email for potential resend functionality
-        localStorage.setItem('pendingVerificationEmail', formData.email);
-      }
+      setSuccess(true);
+      toast.success('Account created successfully! Please check your email to verify your account.');
+      
+      // Store email for potential resend functionality
+      localStorage.setItem('pendingVerificationEmail', formData.email);
+      
     } catch (err: any) {
       console.error('Signup error:', err);
-      const errorMessage = err.response?.data?.error || 'Signup failed. Please try again.';
+      const errorMessage = err.message || 'Signup failed. Please try again.';
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -157,26 +160,14 @@ export default function SignupPage() {
               </div>
               
               <div>
-                <Label htmlFor="phone_number">Phone Number</Label>
+                <Label htmlFor="phone">Phone Number</Label>
                 <Input
-                  id="phone_number"
-                  name="phone_number"
+                  id="phone"
+                  name="phone"
                   type="tel"
-                  value={formData.phone_number}
+                  value={formData.phone}
                   onChange={handleChange}
                   placeholder="+1234567890"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="country">Country</Label>
-                <Input
-                  id="country"
-                  name="country"
-                  type="text"
-                  value={formData.country}
-                  onChange={handleChange}
-                  placeholder="United States"
                 />
               </div>
               
