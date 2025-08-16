@@ -136,7 +136,7 @@ export default function PaymentSuccess() {
 
           {/* Additional Info */}
           <div className="text-center text-xs text-gray-500 space-y-1">
-            <p>🔒 Your payment is secured by Fapshi</p>
+            <p>🔒 Your payment has been processed securely</p>
             <p>📧 Check your email for confirmation</p>
             <p>📱 Contact support if you need help</p>
           </div>

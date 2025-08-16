@@ -12,10 +12,9 @@
   # Frontend build environment variables only
   VITE_SUPABASE_URL = "https://xoivxzjhgjyvuzcmzcas.supabase.co"
   VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvaXZ4empoZ2p5dnV6Y216Y2FzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIyNTQ1NjgsImV4cCI6MjA2NzgzMDU2OH0.ny0Gnf6uVbk9nrLq6VTYqjf9KPVSt2KczF223hf8ZZg"
-  VITE_FAPSHI_ENVIRONMENT = "live"
   # Configure secrets scanning to exclude certain paths and keys
   SECRETS_SCAN_OMIT_PATHS = "backend/,dist/,dev-dist/,tests/,docs/,*.md,.env*,*.sql"
-  SECRETS_SCAN_OMIT_KEYS = "FAPSHI_ENVIRONMENT,PORT,NODE_ENV,SUPABASE_JWT_SECRET,FRONTEND_URL,BACKEND_URL,FAPSHI_BASE_URL,FAPSHI_PUBLIC_KEY,FAPSHI_SECRET_KEY,FAPSHI_WEBHOOK_SECRET,STRIPE_WEBHOOK_SECRET,SMTP_PASS,SMTP_USER,STRIPE_SECRET_KEY,SMTP_HOST,CAMPAY_API_KEY,CAMPAY_WEBHOOK_KEY"
+  SECRETS_SCAN_OMIT_KEYS = "PORT,NODE_ENV,SUPABASE_JWT_SECRET,FRONTEND_URL,BACKEND_URL,STRIPE_WEBHOOK_SECRET,SMTP_PASS,SMTP_USER,STRIPE_SECRET_KEY,SMTP_HOST,CAMPAY_API_KEY,CAMPAY_WEBHOOK_KEY"
 
 # Production context
 [context.production]
@@ -53,13 +52,6 @@
   SUPABASE_URL = "https://xoivxzjhgjyvuzcmzcas.supabase.co"
   SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvaXZ4empoZ2p5dnV6Y216Y2FzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIyNTQ1NjgsImV4cCI6MjA2NzgzMDU2OH0.ny0Gnf6uVbk9nrLq6VTYqjf9KPVSt2KczF223hf8ZZg"
   SUPABASE_JWT_SECRET = "Y1p0iIKXbD9LZngmeH6ovLPG61izKj2s8q2g9hQFK34it0uHzIA5o5TNRxTWWyPkx/c7DT4PDwNZqJ6rwolOKg=="
-  
-  # Fapshi
-  FAPSHI_ENVIRONMENT = "live"
-  FAPSHI_BASE_URL = "https://api.fapshi.com/v1"
-  FAPSHI_PUBLIC_KEY = "${FAPSHI_PUBLIC_KEY}"
-  FAPSHI_SECRET_KEY = "${FAPSHI_SECRET_KEY}"
-  FAPSHI_WEBHOOK_SECRET = "${FAPSHI_WEBHOOK_SECRET}"
   
   # Stripe
   STRIPE_SECRET_KEY = "sk_test_..."
@@ -102,7 +94,7 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://api.stripe.com https://*.supabase.co wss://*.supabase.co https://api.fapshi.com https://api.exchangerate-api.com https://ipapi.co https://fonts.googleapis.com https://fonts.gstatic.com;"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://api.stripe.com https://*.supabase.co wss://*.supabase.co https://api.exchangerate-api.com https://ipapi.co https://fonts.googleapis.com https://fonts.gstatic.com;"
 
 # Cache static assets
 [[headers]]

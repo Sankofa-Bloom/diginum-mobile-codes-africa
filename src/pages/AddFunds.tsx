@@ -56,51 +56,71 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
     setIsProcessing(true);
 
     try {
-      // Create payment record
-      const reference = `FAPSHI_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Create payment record in payment_transactions table
+      const reference = `PAY_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       const { error: paymentError } = await supabase
-        .from('fapshi_payments')
+        .from('payment_transactions')
         .insert([{
           user_id: user.id,
           reference: reference,
           amount: numAmount,
           currency: 'USD',
-          status: 'pending'
+          payment_method: 'manual',
+          status: 'pending',
+          description: isOrderPayment 
+            ? `Payment for ${orderData.serviceTitle} - $${numAmount} USD`
+            : `Add funds to DigiNum account - $${numAmount} USD`
         }]);
 
       if (paymentError) {
         throw new Error(`Failed to create payment record: ${paymentError.message}`);
       }
 
-      // Initialize Fapshi payment
-      const fapshiResponse = await fetch('/.netlify/functions/fapshi-initialize', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          amount: numAmount,
-          currency: 'USD',
-          reference: reference,
-          description: isOrderPayment 
-            ? `Payment for ${orderData.serviceTitle} - $${numAmount} USD`
-            : `Add funds to DigiNum account - $${numAmount} USD`
-        }),
+      // Simulate payment processing (in real app, this would redirect to payment gateway)
+      toast({
+        title: "Payment Initiated",
+        description: `Payment of $${numAmount} USD has been initiated. Reference: ${reference}`,
       });
 
-      if (!fapshiResponse.ok) {
-        throw new Error('Failed to initialize Fapshi payment');
-      }
+      // For demo purposes, simulate successful payment after 2 seconds
+      setTimeout(async () => {
+        try {
+          // Update payment status to completed
+          const { error: updateError } = await supabase
+            .from('payment_transactions')
+            .update({ status: 'completed' })
+            .eq('reference', reference);
 
-      const fapshiData = await fapshiResponse.json();
-      
-      if (fapshiData.success && fapshiData.paymentUrl) {
-        // Redirect to Fapshi payment page
-        window.location.href = fapshiData.paymentUrl;
-      } else {
-        throw new Error(fapshiData.message || 'Failed to get payment URL');
-      }
+          if (updateError) {
+            console.error('Failed to update payment status:', updateError);
+            return;
+          }
+
+          // Credit user balance
+          await creditUserBalance(user.id, numAmount);
+
+          toast({
+            title: "Payment Successful!",
+            description: `$${numAmount} has been added to your account.`,
+          });
+
+          // Call the callback to update parent component
+          onFundsAdded?.(numAmount);
+
+          // If this was an order payment, redirect to dashboard
+          if (isOrderPayment) {
+            navigate('/dashboard', { 
+              state: { 
+                message: `Payment successful! Your order for ${orderData.serviceTitle} is being processed.` 
+              } 
+            });
+          }
+
+        } catch (error) {
+          console.error('Payment completion error:', error);
+        }
+      }, 2000);
 
     } catch (error) {
       console.error('Add funds error:', error);
@@ -114,95 +134,94 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
     }
   };
 
+  // Helper function to credit user balance
+  const creditUserBalance = async (userId: string, amount: number) => {
+    try {
+      // Check if user has existing balance
+      const { data: existingBalance, error: balanceError } = await supabase
+        .from('user_balances')
+        .select('balance')
+        .eq('user_id', userId)
+        .eq('currency', 'USD')
+        .single();
+
+      if (balanceError && balanceError.code === 'PGRST116') {
+        // Create new balance record
+        await supabase
+          .from('user_balances')
+          .insert([{
+            user_id: userId,
+            balance: amount,
+            currency: 'USD'
+          }]);
+      } else if (!balanceError) {
+        // Update existing balance
+        const currentBalance = existingBalance.balance || 0;
+        const newBalance = currentBalance + amount;
+        
+        await supabase
+          .from('user_balances')
+          .update({ 
+            balance: newBalance,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', userId)
+          .eq('currency', 'USD');
+      }
+    } catch (error) {
+      console.error('Failed to credit user balance:', error);
+      throw error;
+    }
+  };
+
   const handleCheckPayment = async () => {
     if (!user) return;
 
     try {
-      // Check for recent pending payments
+      // Check for recent pending payments in payment_transactions table
       const { data: payments, error } = await supabase
-        .from('fapshi_payments')
+        .from('payment_transactions')
         .select('*')
         .eq('user_id', user.id)
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .limit(1);
 
-      if (error || !payments || payments.length === 0) {
+      if (error) {
+        console.error('Error fetching payments:', error);
+        return;
+      }
+
+      if (!payments || payments.length === 0) {
+        toast({
+          title: "No Pending Payments",
+          description: "You have no pending payments to check.",
+        });
         return;
       }
 
       const payment = payments[0];
       
-      // Check payment status with Fapshi
-      const statusResponse = await fetch(`/.netlify/functions/fapshi-status?reference=${payment.reference}`);
-      
-      if (statusResponse.ok) {
-        const statusData = await statusResponse.json();
-        
-        if (statusData.status === 'completed') {
-          // Update payment status
-          await supabase
-            .from('fapshi_payments')
-            .update({ 
-              status: 'completed',
-              fapshi_transaction_id: statusData.transaction_id,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', payment.id);
-
-          // Credit user balance
-          const { data: balanceData, error: balanceError } = await supabase
-            .from('user_balances')
-            .select('balance')
-            .eq('user_id', user.id)
-            .eq('currency', 'USD')
-            .single();
-
-          if (balanceError && balanceError.code === 'PGRST116') {
-            // Create new balance record
-            await supabase
-              .from('user_balances')
-              .insert([{
-                user_id: user.id,
-                balance: payment.amount,
-                currency: 'USD'
-              }]);
-            
-            onFundsAdded?.(payment.amount);
-          } else if (!balanceError) {
-            // Update existing balance
-            const currentBalance = balanceData.balance || 0;
-            const newBalance = currentBalance + payment.amount;
-            
-            await supabase
-              .from('user_balances')
-              .update({ 
-                balance: newBalance,
-                updated_at: new Date().toISOString()
-              })
-              .eq('user_id', user.id)
-              .eq('currency', 'USD');
-            
-            onFundsAdded?.(newBalance);
-          }
-
-          toast({
-            title: "Payment Successful!",
-            description: `$${payment.amount} has been added to your account.`,
-          });
-
-          // If this was an order payment, redirect to dashboard
-          if (isOrderPayment) {
-            navigate('/dashboard', { 
-              state: { 
-                message: `Payment successful! Your order for ${orderData.serviceTitle} is being processed.` 
-              } 
-            });
-          }
-        }
+      // Check if payment is still pending (in real app, this would check with payment gateway)
+      if (payment.status === 'pending') {
+        toast({
+          title: "Payment Status",
+          description: `Payment ${payment.reference} is still being processed. Amount: $${payment.amount} USD`,
+        });
+      } else if (payment.status === 'completed') {
+        toast({
+          title: "Payment Completed",
+          description: `Payment ${payment.reference} has been completed. Amount: $${payment.amount} USD`,
+        });
       }
+
     } catch (error) {
-      console.error('Check payment error:', error);
+      console.error('Payment check error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to check payment status.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -228,7 +247,7 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
               <p className="text-gray-600">
                 {isOrderPayment 
                   ? `Complete your payment for ${orderData.serviceTitle}`
-                  : 'Add funds to your DigiNum account using Fapshi'
+                  : 'Add funds to your DigiNum account'
                 }
               </p>
             </div>
@@ -246,7 +265,7 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
             <CardDescription>
               {isOrderPayment 
                 ? `Pay $${orderData.amount} for ${orderData.serviceTitle}`
-                : 'Add funds to your DigiNum account using Fapshi'
+                : 'Add funds to your DigiNum account'
               }
             </CardDescription>
           </CardHeader>

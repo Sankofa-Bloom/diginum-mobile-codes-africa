@@ -1,7 +1,7 @@
 // Auto-generated version info
 export const VERSION_INFO = {
   "version": "1.0.1",
-  "gitCommit": "f5c2dfb48387ed614f7fff2b9fd871cfd8fff210",
-  "buildDate": "2025-08-12T02:57:20.583Z",
+  "gitCommit": "38852cda3f2a2e94fb18df42f889b7bcc14054ab",
+  "buildDate": "2025-08-12T12:02:26.466Z",
   "environment": "production"
 };
