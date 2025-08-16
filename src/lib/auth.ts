@@ -27,29 +27,12 @@ export async function signup(email: string, password: string, userData?: {
       throw new Error('No user data returned from signup');
     }
 
-    // Create user record in our custom users table
-    try {
-      const { error: userTableError } = await supabase
-        .from('users')
-        .insert([{
-          id: data.user.id, // Use the same ID as Supabase auth
-          email: email.trim(),
-          full_name: userData ? `${userData.first_name || ''} ${userData.last_name || ''}`.trim() : null,
-          phone: userData?.phone || null,
-        }]);
-
-      if (userTableError) {
-        console.error('Error creating user record:', userTableError);
-        // Don't fail the signup if user table insert fails
-        // The user can still authenticate, we'll just need to create the record later
-      }
-    } catch (userTableError) {
-      console.error('Error creating user record:', userTableError);
-      // Continue with signup even if user table insert fails
-    }
+    // Don't create user record here - it will be created when they first log in
+    // This avoids RLS policy issues during signup when the user isn't fully authenticated yet
     
     if (import.meta.env.DEV) {
       console.log('Signup successful for:', email);
+      console.log('User record will be created on first login');
     }
     return { user: data.user };
   } catch (error) {
@@ -184,13 +167,30 @@ export async function getCurrentUser() {
           console.log('Creating missing user record in users table');
         }
         
+        // Try to get additional user data from localStorage (from signup)
+        let additionalData: { full_name?: string; phone?: string } = {};
+        try {
+          const pendingEmail = localStorage.getItem('pendingVerificationEmail');
+          if (pendingEmail === userData.user.email) {
+            // This user just signed up, we might have additional data
+            const signupData = localStorage.getItem('signupUserData');
+            if (signupData) {
+              additionalData = JSON.parse(signupData);
+              // Clean up localStorage
+              localStorage.removeItem('signupUserData');
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing signup data:', e);
+        }
+        
         const { error: insertError } = await supabase
           .from('users')
           .insert([{
             id: userData.user.id,
             email: userData.user.email,
-            full_name: null,
-            phone: null,
+            full_name: additionalData.full_name || null,
+            phone: additionalData.phone || null,
           }]);
 
         if (insertError) {

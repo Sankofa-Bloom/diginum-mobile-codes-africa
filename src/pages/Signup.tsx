@@ -43,6 +43,12 @@ export default function SignupPage() {
         phone: formData.phone
       });
       
+      // Store additional user data for retrieval during first login
+      localStorage.setItem('signupUserData', JSON.stringify({
+        full_name: `${formData.first_name} ${formData.last_name}`.trim(),
+        phone: formData.phone
+      }));
+      
       setSuccess(true);
       toast.success('Account created successfully! Please check your email to verify your account.');
       
