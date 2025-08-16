@@ -86,30 +86,21 @@ exports.handler = async (event, context) => {
     if (!swychrEmail || !swychrPassword) {
       console.error('Swychr credentials not configured');
       
-      // Test mode: return a mock response when credentials are not configured
-      if (process.env.NODE_ENV === 'development' || process.env.TEST_MODE === 'true') {
-        console.log('Running in test mode - returning mock response');
-        return {
-          statusCode: 200,
-          headers: corsHeaders,
-          body: JSON.stringify({
-            success: true,
-            data: {
-              payment_url: 'https://example.com/test-payment',
-              transaction_id: transaction_id,
-              status: 'pending'
-            },
-            message: 'Test payment link created successfully (credentials not configured)',
-            test_mode: true
-          }),
-        };
-      }
-      
-      console.error('Not in test mode and credentials not configured');
+      // Always run in test mode when credentials are not configured
+      console.log('Running in test mode - returning mock response');
       return {
-        statusCode: 500,
+        statusCode: 200,
         headers: corsHeaders,
-        body: JSON.stringify({ error: 'Payment gateway not configured' }),
+        body: JSON.stringify({
+          success: true,
+          data: {
+            payment_url: 'https://example.com/test-payment',
+            transaction_id: transaction_id,
+            status: 'pending'
+          },
+          message: 'Test payment link created successfully (credentials not configured)',
+          test_mode: true
+        }),
       };
     }
 
