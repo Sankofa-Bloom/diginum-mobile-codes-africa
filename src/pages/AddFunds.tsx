@@ -18,6 +18,7 @@ interface AddFundsProps {
 export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsProps) {
   const [amount, setAmount] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [currentUserBalance, setCurrentUserBalance] = useState<number | null>(null);
   const { toast } = useToast();
   const { user } = useCurrentUser();
   const location = useLocation();
@@ -32,6 +33,36 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
       setAmount(orderData.amount.toString());
     }
   }, [isOrderPayment, orderData]);
+
+  // Fetch current user balance
+  useEffect(() => {
+    if (user) {
+      fetchCurrentBalance();
+    }
+  }, [user]);
+
+  const fetchCurrentBalance = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('user_balances')
+        .select('balance')
+        .eq('user_id', user.id)
+        .eq('currency', 'USD')
+        .single();
+        
+      if (error && error.code === 'PGRST116') {
+        // No balance record exists yet
+        setCurrentUserBalance(0);
+      } else if (!error && data) {
+        setCurrentUserBalance(data.balance || 0);
+      }
+    } catch (error) {
+      console.error('Failed to fetch balance:', error);
+      setCurrentUserBalance(0);
+    }
+  };
 
   const handleAddFunds = async () => {
     if (!user) {
@@ -108,12 +139,24 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
           // Call the callback to update parent component
           onFundsAdded?.(numAmount);
 
-          // If this was an order payment, redirect to dashboard
+          // Update local balance state
+          if (currentUserBalance !== null) {
+            setCurrentUserBalance(currentUserBalance + numAmount);
+          }
+
+          // Redirect to dashboard for all successful payments
           if (isOrderPayment) {
             navigate('/dashboard', { 
               state: { 
                 message: `Payment successful! Your order for ${orderData.serviceTitle} is being processed.` 
               } 
+            });
+          } else {
+            // For regular add funds, redirect to dashboard with success message
+            navigate('/dashboard', { 
+              state: { 
+                message: `$${numAmount} has been successfully added to your account!` 
+            } 
             });
           }
 
@@ -137,6 +180,8 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
   // Helper function to credit user balance
   const creditUserBalance = async (userId: string, amount: number) => {
     try {
+      console.log(`Attempting to credit user ${userId} with amount ${amount}`);
+      
       // Check if user has existing balance
       const { data: existingBalance, error: balanceError } = await supabase
         .from('user_balances')
@@ -147,19 +192,31 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
 
       if (balanceError && balanceError.code === 'PGRST116') {
         // Create new balance record
-        await supabase
+        console.log('Creating new balance record');
+        const { error: insertError } = await supabase
           .from('user_balances')
           .insert([{
             user_id: userId,
             balance: amount,
-            currency: 'USD'
+            currency: 'USD',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           }]);
+          
+        if (insertError) {
+          console.error('Failed to create balance record:', insertError);
+          throw new Error(`Failed to create balance record: ${insertError.message}`);
+        }
+        
+        console.log('Balance record created successfully');
       } else if (!balanceError) {
         // Update existing balance
         const currentBalance = existingBalance.balance || 0;
         const newBalance = currentBalance + amount;
         
-        await supabase
+        console.log(`Updating existing balance from ${currentBalance} to ${newBalance}`);
+        
+        const { error: updateError } = await supabase
           .from('user_balances')
           .update({ 
             balance: newBalance,
@@ -167,7 +224,33 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
           })
           .eq('user_id', userId)
           .eq('currency', 'USD');
+          
+        if (updateError) {
+          console.error('Failed to update balance:', updateError);
+          throw new Error(`Failed to update balance: ${updateError.message}`);
+        }
+        
+        console.log('Balance updated successfully');
+      } else {
+        // Some other error occurred
+        console.error('Error checking balance:', balanceError);
+        throw new Error(`Failed to check balance: ${balanceError.message}`);
       }
+      
+      // Verify the balance was updated
+      const { data: verifyBalance, error: verifyError } = await supabase
+        .from('user_balances')
+        .select('balance')
+        .eq('user_id', userId)
+        .eq('currency', 'USD')
+        .single();
+        
+      if (verifyError) {
+        console.error('Failed to verify balance update:', verifyError);
+      } else {
+        console.log(`Balance verification: ${verifyBalance.balance}`);
+      }
+      
     } catch (error) {
       console.error('Failed to credit user balance:', error);
       throw error;
@@ -285,8 +368,16 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
             </div>
             
             {!isOrderPayment && (
-              <div className="text-sm text-muted-foreground">
-                Current Balance: ${currentBalance.toFixed(2)}
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>Current Balance: ${currentUserBalance !== null ? currentUserBalance.toFixed(2) : 'Loading...'}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={fetchCurrentBalance}
+                  className="h-6 w-6 p-0"
+                >
+                  ↻
+                </Button>
               </div>
             )}
 
