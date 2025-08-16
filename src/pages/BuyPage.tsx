@@ -125,107 +125,11 @@ const BuyPage = () => {
     checkAuth();
   }, [navigate]);
 
-  // Add effect to refresh balance when component mounts (e.g., returning from other pages)
+  // Simple effect to refresh balance when component mounts or user returns to page
   useEffect(() => {
     if (isAuthenticated) {
-      // Check if we should refresh balance based on localStorage flags
-      const shouldRefresh = localStorage.getItem('shouldRefreshBalance');
-      if (shouldRefresh === 'true') {
-        console.log('Balance refresh requested, refreshing...');
-        localStorage.removeItem('shouldRefreshBalance');
-        // Small delay to ensure the component is fully mounted
-        setTimeout(() => {
-          loadAccountBalance();
-        }, 100);
-      }
-    }
-  }, [isAuthenticated]);
-
-  // Add effect to refresh balance when page gains focus (e.g., returning from AddFunds)
-  useEffect(() => {
-    const handleFocus = () => {
-      if (isAuthenticated) {
-        // Check if we should refresh balance (e.g., returning from payment)
-        const lastPaymentTime = localStorage.getItem('lastPaymentTime');
-        const lastBalanceCheck = localStorage.getItem('lastBalanceCheck');
-        
-        if (lastPaymentTime && lastBalanceCheck) {
-          const paymentTime = parseInt(lastPaymentTime);
-          const balanceCheckTime = parseInt(lastBalanceCheck);
-          
-          // If payment was made after last balance check, refresh balance
-          if (paymentTime > balanceCheckTime) {
-            console.log('Payment detected, refreshing balance...');
-            loadAccountBalance();
-          }
-        }
-      }
-    };
-
-    // Listen for page focus events
-    window.addEventListener('focus', handleFocus);
-    
-    // Also check on mount if we're returning from a payment
-    handleFocus();
-
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-    };
-  }, [isAuthenticated]);
-
-  // Add effect to refresh balance when navigating back to this page
-  useEffect(() => {
-    const handlePopState = () => {
-      // Small delay to ensure navigation is complete
-      setTimeout(() => {
-        if (isAuthenticated) {
-          console.log('Navigation detected, refreshing balance...');
-          loadAccountBalance();
-        }
-      }, 100);
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
-  }, [isAuthenticated]);
-
-  // Add effect to refresh balance when returning from AddFunds page
-  useEffect(() => {
-    // Check if we're returning from AddFunds with a payment success message
-    const paymentSuccess = localStorage.getItem('paymentSuccess');
-    const lastAddFundsClick = localStorage.getItem('lastAddFundsClick');
-    
-    if (paymentSuccess === 'true') {
-      console.log('Returning from AddFunds with payment success, refreshing balance...');
-      // Clear the flag
-      localStorage.removeItem('paymentSuccess');
-      // Small delay to ensure the component is fully mounted
-      setTimeout(() => {
-        if (isAuthenticated) {
-          loadAccountBalance();
-        }
-      }, 200);
-    } else if (lastAddFundsClick) {
-      // Check if we're returning from AddFunds (within a reasonable time window)
-      const clickTime = parseInt(lastAddFundsClick);
-      const currentTime = Date.now();
-      const timeDiff = currentTime - clickTime;
-      
-      // If we're returning within 5 minutes of clicking Add Funds, refresh balance
-      if (timeDiff < 5 * 60 * 1000) {
-        console.log('Returning from AddFunds, refreshing balance...');
-        // Clear the timestamp
-        localStorage.removeItem('lastAddFundsClick');
-        // Small delay to ensure the component is fully mounted
-        setTimeout(() => {
-          if (isAuthenticated) {
-            loadAccountBalance();
-          }
-        }, 200);
-      }
+      // Refresh balance from database whenever user returns to this page
+      loadAccountBalance();
     }
   }, [isAuthenticated]);
 
@@ -265,9 +169,6 @@ const BuyPage = () => {
       
       const finalBalance = parseFloat(balance) || 0;
       setAccountBalance(finalBalance);
-      
-      // Store the last balance check time
-      localStorage.setItem('lastBalanceCheck', Date.now().toString());
       
       if (import.meta.env.DEV) {
         console.log('Account balance loaded and set:', finalBalance);
@@ -601,11 +502,7 @@ const BuyPage = () => {
             variant="outline" 
             size="sm" 
             className="gap-2"
-            onClick={() => {
-              // Store current time to detect when returning from AddFunds
-              localStorage.setItem('lastAddFundsClick', Date.now().toString());
-              navigate('/add-funds');
-            }}
+            onClick={() => navigate('/add-funds')}
           >
             <DollarSign className="h-4 w-4" />
             Add Funds

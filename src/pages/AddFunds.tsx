@@ -438,10 +438,7 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
               variant="ghost"
               size="sm"
               onClick={() => {
-                        // Store payment success in localStorage for balance refresh
-        localStorage.setItem('lastPaymentTime', Date.now().toString());
-        localStorage.setItem('paymentSuccess', 'true');
-        localStorage.setItem('shouldRefreshBalance', 'true');
+                        // Navigate back to previous page
         navigate(-1);
               }}
               className="flex items-center space-x-2"
