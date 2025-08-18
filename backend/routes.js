@@ -1313,6 +1313,71 @@ export default async function routes(fastify, opts) {
     return { paymentId: request.params.paymentId, status: 'completed' };
   });
 
+  // Swychr auth token cache and helpers (24h JWT expiry)
+  let swychrAuthCache = { token: null, fetchedAt: 0, expiresAt: 0 };
+  function decodeJwtExpiryMillis(jwtToken) {
+    try {
+      const payloadBase64 = jwtToken.split('.')[1];
+      if (!payloadBase64) return null;
+      const json = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
+      if (json && typeof json.exp === 'number') {
+        return json.exp * 1000; // seconds -> ms
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+  async function getSwychrAuthToken() {
+    const now = Date.now();
+    // Add a 5-minute safety buffer before expiry
+    const safetyMs = 5 * 60 * 1000;
+    if (swychrAuthCache.token && now < (swychrAuthCache.expiresAt - safetyMs)) {
+      return swychrAuthCache.token;
+    }
+
+    const baseUrl = process.env.SWYCHR_BASE_URL || 'https://api.accountpe.com/api/payin';
+    const email = process.env.SWYCHR_EMAIL;
+    const password = process.env.SWYCHR_PASSWORD;
+    if (!email || !password) {
+      throw new Error('SWYCHR_EMAIL/SWYCHR_PASSWORD not configured');
+    }
+
+    const authRes = await fetch(`${baseUrl}/admin/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const authJson = await authRes.json().catch(() => ({}));
+    if (!authRes.ok || authJson.status !== 0) {
+      throw new Error(`Swychr auth failed: ${authRes.status} ${authJson.message || ''}`.trim());
+    }
+    const token = authJson.data?.token || authJson.token;
+    if (!token) throw new Error('Swychr auth response missing token');
+    const expMs = decodeJwtExpiryMillis(token) || (now + 24 * 60 * 60 * 1000);
+    swychrAuthCache = { token, fetchedAt: now, expiresAt: expMs };
+    return token;
+  }
+
+  async function swychrAuthorizedFetch(path, options = {}) {
+    const baseUrl = process.env.SWYCHR_BASE_URL || 'https://api.accountpe.com/api/payin';
+    let token = await getSwychrAuthToken();
+    let res = await fetch(`${baseUrl}${path}`, {
+      ...options,
+      headers: { ...(options.headers || {}), 'Authorization': `Bearer ${token}` }
+    });
+    if (res.status === 401 || res.status === 403) {
+      // Refresh token and retry once
+      swychrAuthCache = { token: null, fetchedAt: 0, expiresAt: 0 };
+      token = await getSwychrAuthToken();
+      res = await fetch(`${baseUrl}${path}`, {
+        ...options,
+        headers: { ...(options.headers || {}), 'Authorization': `Bearer ${token}` }
+      });
+    }
+    return res;
+  }
+
   // Swychr Payment Gateway Routes (Multi-Currency Support)
   fastify.post('/api/payment/swychr/initialize', { preHandler: requireAuth }, async (request, reply) => {
     try {
@@ -1342,13 +1407,12 @@ export default async function routes(fastify, opts) {
       };
 
       // Make request to Swychr API
-      const swychrResponse = await fetch(`${process.env.SWYCHR_BASE_URL}/create_payment_links`, {
+      const swychrResponse = await swychrAuthorizedFetch('/create_payment_links', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.SWYCHR_AUTH_TOKEN}`,
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(swychrPayload),
+        body: JSON.stringify(swychrPayload)
       });
 
       const result = await swychrResponse.json();
@@ -1410,15 +1474,12 @@ export default async function routes(fastify, opts) {
       const { transactionId } = request.params;
 
       // Verify payment with Swychr
-      const verificationResponse = await fetch(`${process.env.SWYCHR_BASE_URL}/payment_link_status`, {
+      const verificationResponse = await swychrAuthorizedFetch('/payment_link_status', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.SWYCHR_AUTH_TOKEN}`,
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          transaction_id: transactionId
-        })
+        body: JSON.stringify({ transaction_id: transactionId })
       });
 
       const result = await verificationResponse.json();
@@ -2672,15 +2733,12 @@ export default async function routes(fastify, opts) {
       }
 
       // Verify payment with Swychr
-      const verificationResponse = await fetch(`${process.env.SWYCHR_BASE_URL}/payment_link_status`, {
+      const verificationResponse = await swychrAuthorizedFetch('/payment_link_status', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.SWYCHR_AUTH_TOKEN}`,
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          transaction_id: reference
-        })
+        body: JSON.stringify({ transaction_id: reference })
       });
 
       const result = await verificationResponse.json();
