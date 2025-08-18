@@ -105,6 +105,16 @@
   to = "/.netlify/functions/swychr-create-payment-v4/:splat"
   status = 200
 
+[[redirects]]
+  from = "/swychr-check-status"
+  to = "/.netlify/functions/swychr-check-status"
+  status = 200
+
+[[redirects]]
+  from = "/swychr-check-status/*"
+  to = "/.netlify/functions/swychr-check-status/:splat"
+  status = 200
+
 # Redirect all other requests to index.html for SPA routing
 [[redirects]]
   from = "/*"
