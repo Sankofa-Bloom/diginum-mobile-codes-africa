@@ -1,10 +1,16 @@
 const { createClient } = require('@supabase/supabase-js');
 const bcrypt = require('bcrypt');
 
-// Initialize Supabase
+// Initialize Supabase clients
+// - supabase: for auth (uses anon key)
+// - supabaseAdmin: for privileged DB ops after verifying user (bypasses RLS)
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
+);
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 // Helper function to send CORS headers
@@ -859,7 +865,7 @@ exports.handler = async (event, context) => {
         console.log('Creating payment transaction in database...');
         
         // Create payment transaction record in the existing add_funds_payments table
-        const { data: transaction, error: insertError } = await supabase
+        const { data: transaction, error: insertError } = await supabaseAdmin
           .from('add_funds_payments')
           .insert([{
             user_id: userId,
@@ -948,7 +954,7 @@ exports.handler = async (event, context) => {
         console.log('Crediting user balance...');
         
         // Check if user has existing balance
-        const { data: existingBalance, error: balanceError } = await supabase
+        const { data: existingBalance, error: balanceError } = await supabaseAdmin
           .from('user_balances')
           .select('balance')
           .eq('user_id', userId)
@@ -959,7 +965,7 @@ exports.handler = async (event, context) => {
 
         if (balanceError && balanceError.code === 'PGRST116') {
           // Create new balance record
-          const { data: insertResult, error: insertError } = await supabase
+          const { data: insertResult, error: insertError } = await supabaseAdmin
             .from('user_balances')
             .insert([{
               user_id: userId,
@@ -991,7 +997,7 @@ exports.handler = async (event, context) => {
           const currentBalance = existingBalance.balance || 0;
           newBalance = currentBalance + amount;
           
-          const { data: updateResult, error: updateError } = await supabase
+          const { data: updateResult, error: updateError } = await supabaseAdmin
             .from('user_balances')
             .update({ 
               balance: newBalance,
@@ -1073,7 +1079,7 @@ exports.handler = async (event, context) => {
         console.log('Updating payment status...');
         
         // Update payment status in add_funds_payments table
-        const { data: updatedPayment, error: updateError } = await supabase
+        const { data: updatedPayment, error: updateError } = await supabaseAdmin
           .from('add_funds_payments')
           .update({ 
             status: status,
@@ -1149,7 +1155,7 @@ exports.handler = async (event, context) => {
         }
 
         // Get payment details from add_funds_payments table
-        const { data: payment, error: fetchError } = await supabase
+        const { data: payment, error: fetchError } = await supabaseAdmin
           .from('add_funds_payments')
           .select('*')
           .eq('reference', reference)
