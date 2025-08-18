@@ -18,7 +18,24 @@ exports.handler = async (event, context) => {
     };
   }
 
-  // Only allow POST requests
+  // Allow GET requests for health check
+  if (event.httpMethod === 'GET') {
+    return {
+      statusCode: 200,
+      headers: { ...corsHeaders, 'X-Function-Version': FUNCTION_VERSION },
+      body: JSON.stringify({ 
+        functionVersion: FUNCTION_VERSION, 
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'unknown',
+        test_mode: process.env.TEST_MODE || 'false',
+        swychr_email: process.env.SWYCHR_EMAIL ? 'SET' : 'NOT_SET',
+        swychr_password: process.env.SWYCHR_PASSWORD ? 'SET' : 'NOT_SET'
+      }),
+    };
+  }
+  
+  // Only allow POST requests for payment creation
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -75,8 +92,21 @@ exports.handler = async (event, context) => {
 
     // Global TEST_MODE override: short-circuit to mock success when enabled
     const isTestMode = String(process.env.TEST_MODE || '').toLowerCase() === 'true';
-    if (isTestMode) {
-      console.log('TEST_MODE enabled - returning mock response');
+    const hasCredentials = process.env.SWYCHR_EMAIL && process.env.SWYCHR_PASSWORD;
+    
+    console.log('Environment check:', { 
+      TEST_MODE: process.env.TEST_MODE, 
+      isTestMode: isTestMode,
+      hasCredentials: hasCredentials,
+      NODE_ENV: process.env.NODE_ENV,
+      raw_test_mode: process.env.TEST_MODE
+    });
+    
+    // Run in test mode if explicitly enabled OR if credentials are missing
+    if (isTestMode || !hasCredentials) {
+      console.log('Running in test mode - returning mock response');
+      console.log('Test mode reason:', isTestMode ? 'TEST_MODE enabled' : 'No credentials configured');
+      
       return {
         statusCode: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -87,8 +117,14 @@ exports.handler = async (event, context) => {
             transaction_id,
             status: 'pending'
           },
-          message: 'Test payment link created successfully (TEST_MODE)',
-          test_mode: true
+          message: 'Test payment link created successfully (TEST_MODE or no credentials)',
+          test_mode: true,
+          reason: isTestMode ? 'TEST_MODE enabled' : 'No credentials configured',
+          environment_check: {
+            TEST_MODE: process.env.TEST_MODE,
+            isTestMode: isTestMode,
+            hasCredentials: hasCredentials
+          }
         })
       };
     }
@@ -107,9 +143,26 @@ exports.handler = async (event, context) => {
     // Check if credentials are configured
     if (!swychrEmail || !swychrPassword) {
       console.error('Swychr credentials not configured');
+      console.log('Swychr credentials check:', {
+        email: swychrEmail ? 'SET' : 'NOT_SET',
+        password: swychrPassword ? 'SET' : 'NOT_SET'
+      });
       
-      // Run in test mode when credentials are not configured
-      console.log('Running in test mode - returning mock response');
+      // Even with credentials missing, we should still be in test mode
+      console.log('Credentials missing but TEST_MODE should handle this');
+    }
+
+    // If we reach here, credentials are configured, proceed with real Swychr integration
+    console.log('Attempting Swychr authentication...');
+    console.log('Auth request details:', {
+      url: `${swychrBaseURL}/admin/auth`,
+      email: swychrEmail ? '***' : 'NOT_SET',
+      password: swychrPassword ? '***' : 'NOT_SET'
+    });
+    
+    // Double-check test mode before making API call
+    if (String(process.env.TEST_MODE || '').toLowerCase() === 'true') {
+      console.log('TEST_MODE detected during API call - returning mock response');
       return {
         statusCode: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -117,17 +170,15 @@ exports.handler = async (event, context) => {
           success: true,
           data: {
             payment_url: 'https://example.com/test-payment',
-            transaction_id: transaction_id,
+            transaction_id,
             status: 'pending'
           },
-          message: 'Test payment link created successfully (credentials not configured)',
+          message: 'Test payment link created successfully (TEST_MODE detected during API call)',
           test_mode: true
-        }),
+        })
       };
     }
-
-    // If we reach here, credentials are configured, proceed with real Swychr integration
-    console.log('Attempting Swychr authentication...');
+    
     const authResponse = await fetch(`${swychrBaseURL}/admin/auth`, {
       method: 'POST',
       headers: {
@@ -228,6 +279,31 @@ exports.handler = async (event, context) => {
   } catch (error) {
     console.error('Swychr create payment error:', error);
     console.error('Error stack:', error.stack);
+    
+    // If we're in test mode, return a mock response instead of error
+    const isTestMode = String(process.env.TEST_MODE || '').toLowerCase() === 'true';
+    
+    if (isTestMode) {
+      console.log('Error occurred but TEST_MODE is enabled - returning mock response');
+      return {
+        statusCode: 200,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ functionVersion: FUNCTION_VERSION,
+          success: true,
+          data: {
+            payment_url: 'https://example.com/test-payment',
+            transaction_id: event.body ? JSON.parse(event.body).transaction_id : 'unknown',
+            status: 'pending'
+          },
+          message: 'Test payment link created successfully (fallback from error)',
+          test_mode: true,
+          original_error: error.message
+        }),
+      };
+    }
     
     return {
       statusCode: 500,

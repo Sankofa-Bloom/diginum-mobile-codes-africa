@@ -86,11 +86,23 @@
   # Other
   PORT = "8888"
   TEST_MODE = "true"
+  NODE_ENV = "production"
 
 # API redirects to Netlify Functions (must come first)
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api/:splat"
+  status = 200
+
+# Swychr payment function redirects
+[[redirects]]
+  from = "/swychr-create-payment-v4"
+  to = "/.netlify/functions/swychr-create-payment-v4"
+  status = 200
+
+[[redirects]]
+  from = "/swychr-create-payment-v4/*"
+  to = "/.netlify/functions/swychr-create-payment-v4/:splat"
   status = 200
 
 # Redirect all other requests to index.html for SPA routing
