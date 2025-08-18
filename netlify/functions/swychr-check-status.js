@@ -77,6 +77,7 @@ exports.handler = async (event, context) => {
           status: 'completed',
           amount: 1000,
           currency: 'USD',
+          amount_usd: 1000, // Always store in USD in backend
           payment_date: new Date().toISOString(),
           reference: `test-${transaction_id}`
         },

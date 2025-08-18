@@ -83,6 +83,9 @@
   FRONTEND_URL = "https://diginum.netlify.app"
   BACKEND_URL = "https://diginum.netlify.app"
   
+  # Fixer API for exchange rates
+  FIXER_API_KEY = "your_fixer_api_key_here"
+  
   # Other
   PORT = "8888"
   TEST_MODE = "true"
@@ -113,6 +116,12 @@
 [[redirects]]
   from = "/swychr-check-status/*"
   to = "/.netlify/functions/swychr-check-status/:splat"
+  status = 200
+
+# Exchange rates update function redirect
+[[redirects]]
+  from = "/update-exchange-rates"
+  to = "/.netlify/functions/update-exchange-rates"
   status = 200
 
 # Redirect all other requests to index.html for SPA routing

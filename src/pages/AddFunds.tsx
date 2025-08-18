@@ -10,6 +10,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import apiClient from '@/lib/apiClient';
 import { supabase } from '@/lib/supabaseClient';
 import LanguageToggle from '@/components/LanguageToggle';
+import DualCurrencyDisplay from '@/components/DualCurrencyDisplay';
 
 interface AddFundsProps {
   onFundsAdded?: (newBalance: number) => void;
@@ -18,6 +19,7 @@ interface AddFundsProps {
 
 export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsProps) {
   const [amount, setAmount] = useState('');
+  const [selectedCurrency, setSelectedCurrency] = useState('USD');
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentUserBalance, setCurrentUserBalance] = useState<number | null>(null);
   const [paymentLink, setPaymentLink] = useState<string | null>(null);
@@ -128,12 +130,12 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
         const paymentResponse = await apiClient.post('/payment-transactions', {
           reference: reference,
           amount: numAmount,
-          currency: 'USD',
+          currency: selectedCurrency,
           payment_method: 'swychr',
           status: 'pending',
           description: isOrderPayment 
-            ? `Payment for ${orderData.serviceTitle} - $${numAmount} USD`
-            : `Add funds to DigiNum account - $${numAmount} USD`
+            ? `Payment for ${orderData.serviceTitle} - ${numAmount} ${selectedCurrency}`
+            : `Add funds to DigiNum account - ${numAmount} ${selectedCurrency}`
         });
 
         if (!(paymentResponse as any).success) {
@@ -155,6 +157,7 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
           email: user.email || '',
           mobile: user.phone || '',
           amount: numAmount,
+          currency: selectedCurrency,
           transaction_id: reference,
           description: isOrderPayment 
             ? `Payment for ${orderData.serviceTitle}`
@@ -448,17 +451,45 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="amount">Amount (USD)</Label>
-              <Input
-                id="amount"
-                type="number"
-                placeholder="Enter amount"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                min="1"
-                step="0.01"
-                disabled={isOrderPayment}
-              />
+              <Label htmlFor="amount">Amount</Label>
+              <div className="flex space-x-2">
+                <Input
+                  id="amount"
+                  type="number"
+                  placeholder="Enter amount"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  min="1"
+                  step="0.01"
+                  disabled={isOrderPayment}
+                  className="flex-1"
+                />
+                <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
+                  <SelectTrigger className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">USD</SelectItem>
+                    <SelectItem value="EUR">EUR</SelectItem>
+                    <SelectItem value="GBP">GBP</SelectItem>
+                    <SelectItem value="NGN">NGN</SelectItem>
+                    <SelectItem value="KES">KES</SelectItem>
+                    <SelectItem value="GHS">GHS</SelectItem>
+                    <SelectItem value="EGP">EGP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Dual Currency Display */}
+              {amount && parseFloat(amount) > 0 && (
+                <div className="text-sm text-muted-foreground">
+                  <DualCurrencyDisplay 
+                    amount={parseFloat(amount)} 
+                    currency={selectedCurrency}
+                    size="sm"
+                  />
+                </div>
+              )}
             </div>
             
             {!isOrderPayment && (

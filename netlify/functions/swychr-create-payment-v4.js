@@ -67,6 +67,7 @@ exports.handler = async (event, context) => {
       email,
       mobile,
       amount,
+      currency = 'USD', // Default to USD if not specified
       transaction_id,
       description,
       pass_digital_charge
@@ -120,7 +121,10 @@ exports.handler = async (event, context) => {
           data: {
             payment_url: 'https://example.com/test-payment',
             transaction_id,
-            status: 'pending'
+            status: 'pending',
+            currency: currency,
+            amount: amount,
+            amount_usd: currency === 'USD' ? amount : Math.round(amount * 0.85) // Rough conversion for demo
           },
           message: 'Test payment link created successfully (TEST_MODE or no credentials)',
           test_mode: true,

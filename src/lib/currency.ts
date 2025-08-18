@@ -25,8 +25,9 @@ export interface UserLocation {
 
 export class CurrencyService {
   private static readonly FX_BUFFER = 0.025; // 2.5% buffer for FX volatility
-  private static readonly API_KEY = 'YOUR_API_KEY'; // Replace with actual API key
-  private static readonly CURRENCY_API_URL = 'https://api.exchangerate-api.com/v4/latest/USD';
+  private static readonly FIXER_API_KEY = process.env.VITE_FIXER_API_KEY || 'YOUR_FIXER_API_KEY'; // Replace with actual Fixer API key
+  private static readonly FIXER_API_URL = 'https://api.fixer.io/v1/latest?base=USD';
+  private static readonly CURRENCY_API_URL = 'https://api.exchangerate-api.com/v4/latest/USD'; // Fallback
 
   // Get user's location and currency based on IP
   static async getUserLocation(): Promise<UserLocation> {
@@ -51,9 +52,22 @@ export class CurrencyService {
     }
   }
 
-  // Fetch live exchange rates from API
+  // Fetch live exchange rates from Fixer API (primary)
   static async fetchLiveRates(): Promise<Record<string, number>> {
     try {
+      // Try Fixer API first
+      if (this.FIXER_API_KEY && this.FIXER_API_KEY !== 'YOUR_FIXER_API_KEY') {
+        const fixerUrl = `${this.FIXER_API_URL}&access_key=${this.FIXER_API_KEY}`;
+        const response = await fetch(fixerUrl);
+        const data = await response.json();
+        
+        if (data.success && data.rates) {
+          console.log('Successfully fetched rates from Fixer API');
+          return data.rates;
+        }
+      }
+      
+      // Fallback to exchange rate API
       const response = await fetch(this.CURRENCY_API_URL);
       const data = await response.json();
       return data.rates || {};
@@ -63,24 +77,45 @@ export class CurrencyService {
     }
   }
 
-  // Get exchange rates from backend (with fallback to live API)
+  // Get exchange rates with smart caching and updates
   static async getExchangeRates(): Promise<ExchangeRate[]> {
     try {
-      // Try to get from backend first
+      // First try to get from backend
       const response = await apiClient.get('/exchange-rates');
       const ratesData = response.rates || response;
       
-      // Transform API response to match ExchangeRate interface
-      const rates = ratesData.map((rate: any) => ({
-        currency: rate.code || rate.currency,
-        rate: rate.rate,
-        vat: rate.vat || 0,
-        updated_at: rate.updated_at || new Date().toISOString()
-      }));
-      
-      return rates;
+      if (ratesData && ratesData.length > 0) {
+        // Transform API response to match ExchangeRate interface
+        const rates = ratesData.map((rate: any) => ({
+          currency: rate.code || rate.currency,
+          rate: rate.rate,
+          vat: rate.vat || 0,
+          updated_at: rate.updated_at || new Date().toISOString()
+        }));
+        
+        console.log('Got exchange rates from backend');
+        return rates;
+      }
     } catch (error) {
       console.error('Error fetching from backend:', error);
+    }
+
+    // Try cached rates from local storage
+    const cachedRates = this.getCachedRates();
+    if (cachedRates && cachedRates.length > 0) {
+      console.log('Using cached exchange rates');
+      return cachedRates;
+    }
+
+    // Try to update rates (this will fetch from Fixer API)
+    try {
+      await this.updateExchangeRates();
+      const updatedRates = this.getCachedRates();
+      if (updatedRates) {
+        return updatedRates;
+      }
+    } catch (error) {
+      console.error('Error updating exchange rates:', error);
     }
 
     // Fallback to live API
@@ -101,6 +136,10 @@ export class CurrencyService {
           });
         }
       }
+
+      // Cache the rates
+      localStorage.setItem('exchange_rates_cache', JSON.stringify(rates));
+      localStorage.setItem('exchange_rates_last_update', Date.now().toString());
 
       return rates;
     } catch (error) {
@@ -266,6 +305,33 @@ export class CurrencyService {
     return symbols[currency] || currency;
   }
 
+  // Save exchange rates to database
+  static async saveExchangeRates(rates: ExchangeRate[]): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('exchange_rates')
+        .upsert(
+          rates.map(rate => ({
+            currency: rate.currency,
+            rate: rate.rate,
+            vat: rate.vat,
+            updated_at: rate.updated_at
+          })),
+          { onConflict: 'currency' }
+        );
+
+      if (error) {
+        console.error('Error saving exchange rates:', error);
+        throw new Error(`Database error: ${error.message || 'Failed to save rates'}`);
+      }
+      
+      console.log('Exchange rates saved to database');
+    } catch (error) {
+      console.error('Error saving exchange rates:', error);
+      throw error;
+    }
+  }
+
   // Save payment transaction to database
   static async savePaymentTransaction(
     originalAmount: number,
@@ -327,5 +393,63 @@ export class CurrencyService {
   // Set user's preferred currency
   static setUserCurrency(currency: string): void {
     localStorage.setItem('user_currency', currency);
+  }
+
+  // Update exchange rates (should be called every 24 hours)
+  static async updateExchangeRates(): Promise<void> {
+    try {
+      console.log('Updating exchange rates...');
+      
+      // Check if rates were updated recently (within 24 hours)
+      const lastUpdate = localStorage.getItem('exchange_rates_last_update');
+      const now = Date.now();
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      
+      if (lastUpdate && (now - parseInt(lastUpdate)) < twentyFourHours) {
+        console.log('Exchange rates are recent, skipping update');
+        return;
+      }
+      
+      // Fetch new rates
+      const liveRates = await this.fetchLiveRates();
+      const rates: ExchangeRate[] = [
+        { currency: 'USD', rate: 1.0, vat: 0, updated_at: new Date().toISOString() }
+      ];
+
+      // Convert live rates to our format
+      for (const [currency, rate] of Object.entries(liveRates)) {
+        if (currency !== 'USD') {
+          rates.push({
+            currency: currency.toUpperCase(),
+            rate: rate as number,
+            vat: this.getVATForCurrency(currency.toUpperCase()),
+            updated_at: new Date().toISOString()
+          });
+        }
+      }
+
+      // Save to database
+      await this.saveExchangeRates(rates);
+      
+      // Update local storage timestamp
+      localStorage.setItem('exchange_rates_last_update', now.toString());
+      localStorage.setItem('exchange_rates_cache', JSON.stringify(rates));
+      
+      console.log('Exchange rates updated successfully');
+    } catch (error) {
+      console.error('Error updating exchange rates:', error);
+      throw error;
+    }
+  }
+
+  // Get cached exchange rates from local storage
+  static getCachedRates(): ExchangeRate[] | null {
+    try {
+      const cached = localStorage.getItem('exchange_rates_cache');
+      return cached ? JSON.parse(cached) : null;
+    } catch (error) {
+      console.error('Error getting cached rates:', error);
+      return null;
+    }
   }
 }
