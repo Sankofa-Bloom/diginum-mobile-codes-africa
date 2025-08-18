@@ -72,6 +72,26 @@ exports.handler = async (event, context) => {
       };
     }
 
+    // Global TEST_MODE override: short-circuit to mock success when enabled
+    const isTestMode = String(process.env.TEST_MODE || '').toLowerCase() === 'true';
+    if (isTestMode) {
+      console.log('TEST_MODE enabled - returning mock response');
+      return {
+        statusCode: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          success: true,
+          data: {
+            payment_url: 'https://example.com/test-payment',
+            transaction_id,
+            status: 'pending'
+          },
+          message: 'Test payment link created successfully (TEST_MODE)',
+          test_mode: true
+        })
+      };
+    }
+
     // Get Swychr credentials from environment variables
     const swychrEmail = process.env.SWYCHR_EMAIL;
     const swychrPassword = process.env.SWYCHR_PASSWORD;
