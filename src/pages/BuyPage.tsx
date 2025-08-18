@@ -142,20 +142,23 @@ const BuyPage = () => {
       const response = await apiClient.get('/account-balance');
       if (import.meta.env.DEV) {
         console.log('Balance API response:', response);
+        console.log('Response type:', typeof response);
+        console.log('Response keys:', Object.keys(response || {}));
         console.log('Full response object:', JSON.stringify(response, null, 2));
       }
       
-      // Handle multiple response formats
+      // Handle response format from Netlify function
+      // apiClient interceptor returns response.data directly, so response is already the data
       let balance = 0;
-      if (response.data?.balance !== undefined) {
-        balance = response.data.balance;
-        if (import.meta.env.DEV) {
-          console.log('Found balance in response.data.balance:', balance);
-        }
-      } else if (response.balance !== undefined) {
+      if (response.balance !== undefined) {
         balance = response.balance;
         if (import.meta.env.DEV) {
           console.log('Found balance in response.balance:', balance);
+        }
+      } else if (response.data?.balance !== undefined) {
+        balance = response.data.balance;
+        if (import.meta.env.DEV) {
+          console.log('Found balance in response.data.balance:', balance);
         }
       } else if (typeof response === 'object' && response.balance !== undefined) {
         balance = response.balance;
