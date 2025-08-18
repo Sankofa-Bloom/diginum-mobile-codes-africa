@@ -858,18 +858,20 @@ exports.handler = async (event, context) => {
 
         console.log('Attempting to create payment transaction...');
         
-        // Try to create payment transaction record in simple_payments table
-        // If the table doesn't exist, this will fail and we'll get a clear error
+        // Create payment transaction record in the existing add_funds_payments table
         const { data: transaction, error: insertError } = await supabase
-          .from('simple_payments')
+          .from('add_funds_payments')
           .insert([{
             user_id: userId,
-            reference: reference,
-            amount: amount,
+            amount_usd: amount, // Store as USD amount
+            amount_original: amount, // Store original amount (same as USD for now)
             currency: currency,
-            payment_method: payment_method,
+            phone_number: 'N/A', // Required field, set to N/A for now
+            reference: reference,
             status: status,
-            description: description || `Payment transaction - ${reference}`
+            campay_transaction_id: null, // Not applicable for this payment method
+            exchange_rate: 1.0, // Default to 1.0 for USD
+            markup: 0.0 // No markup for this payment method
           }])
           .select()
           .single();
@@ -1080,9 +1082,9 @@ exports.handler = async (event, context) => {
           };
         }
 
-        // Update payment transaction status
-        const { data: transaction, error: updateError } = await supabase
-          .from('simple_payments')
+        // Update payment status in add_funds_payments table
+        const { data: updatedPayment, error: updateError } = await supabase
+          .from('add_funds_payments')
           .update({ 
             status: status,
             updated_at: new Date().toISOString()
@@ -1106,7 +1108,7 @@ exports.handler = async (event, context) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             success: true,
-            transaction: transaction,
+            transaction: updatedPayment,
             message: 'Payment transaction updated successfully'
           })
         };
@@ -1156,9 +1158,9 @@ exports.handler = async (event, context) => {
           };
         }
 
-        // Get payment transaction details
-        const { data: transaction, error: fetchError } = await supabase
-          .from('simple_payments')
+        // Get payment details from add_funds_payments table
+        const { data: payment, error: fetchError } = await supabase
+          .from('add_funds_payments')
           .select('*')
           .eq('reference', reference)
           .eq('user_id', userId)
@@ -1178,7 +1180,7 @@ exports.handler = async (event, context) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             success: true,
-            transaction: transaction
+            transaction: payment
           })
         };
       } catch (error) {
