@@ -94,7 +94,10 @@ class SwychrAPI {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.authToken}`,
         },
-        body: JSON.stringify(paymentData),
+        body: JSON.stringify({
+          ...paymentData,
+          amount: Math.round((paymentData as any).amount), // API expects integer units
+        }),
       });
 
       if (!response.ok) {
@@ -103,7 +106,7 @@ class SwychrAPI {
 
       const data: SwychrPaymentLinkResponse = await response.json();
       
-      if (data.status !== 200) {
+      if ((data as any).status !== 0) {
         throw new Error(data.message || 'Failed to create payment link');
       }
 

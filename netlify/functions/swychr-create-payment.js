@@ -173,7 +173,7 @@ exports.handler = async (event, context) => {
       name,
       email,
       mobile: mobile || '', // Optional field
-      amount: Math.round(amount * 100), // Convert to cents as integer
+      amount: Math.round(amount), // API expects integer units
       transaction_id,
       description: description || `Payment for ${name}`,
       pass_digital_charge
