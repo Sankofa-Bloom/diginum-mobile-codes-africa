@@ -83,10 +83,11 @@ exports.handler = async (event, context) => {
       baseURL: swychrBaseURL
     });
 
+    // Check if credentials are configured
     if (!swychrEmail || !swychrPassword) {
       console.error('Swychr credentials not configured');
       
-      // Always run in test mode when credentials are not configured
+      // Run in test mode when credentials are not configured
       console.log('Running in test mode - returning mock response');
       return {
         statusCode: 200,
@@ -104,7 +105,7 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // First authenticate with Swychr
+    // If we reach here, credentials are configured, proceed with real Swychr integration
     console.log('Attempting Swychr authentication...');
     const authResponse = await fetch(`${swychrBaseURL}/admin/auth`, {
       method: 'POST',
