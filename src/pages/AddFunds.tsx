@@ -144,7 +144,7 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
       }
 
       // Create Swychr payment link
-      const paymentResponse = await fetch('/.netlify/functions/swychr-create-payment', {
+      const paymentResponse = await fetch('/.netlify/functions/swychr-create-payment-v4', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -358,26 +358,26 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
         if ((paymentResponse as any).success && (paymentResponse as any).transaction) {
           const paymentAmount = (paymentResponse as any).transaction.amount;
           
-          // Credit user balance
+        // Credit user balance
           await creditUserBalance(user.id, paymentAmount);
 
-          // Store the payment time for balance refresh detection
-          localStorage.setItem('lastPaymentTime', Date.now().toString());
+        // Store the payment time for balance refresh detection
+        localStorage.setItem('lastPaymentTime', Date.now().toString());
 
-          toast({
-            title: "Payment Successful!",
+        toast({
+          title: "Payment Successful!",
             description: `$${paymentAmount} has been added to your account.`,
-          });
+        });
 
-          // Call the callback to update parent component
+        // Call the callback to update parent component
           onFundsAdded?.(paymentAmount);
 
           // Refresh the current balance display
           fetchCurrentBalance();
 
           // Clear the payment link and transaction ID
-          setPaymentLink(null);
-          setTransactionId(null);
+        setPaymentLink(null);
+        setTransactionId(null);
         } else {
           throw new Error('Failed to get payment details');
         }
