@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { supabase } from '@/lib/supabaseClient';
+import apiClient from '@/lib/apiClient';
 import LanguageToggle from '@/components/LanguageToggle';
 
 interface AddFundsProps {
@@ -44,25 +44,55 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
     }
   }, [user]);
 
+  // Debug effect to log balance changes
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log('🔄 AddFunds - currentUserBalance state changed to:', currentUserBalance);
+    }
+  }, [currentUserBalance]);
+
   const fetchCurrentBalance = async () => {
     if (!user) return;
     
     try {
-      const { data, error } = await supabase
-        .from('user_balances')
-        .select('balance')
-        .eq('user_id', user.id)
-        .eq('currency', 'USD')
-        .single();
-        
-      if (error && error.code === 'PGRST116') {
-        // No balance record exists yet
-        setCurrentUserBalance(0);
-      } else if (!error && data) {
-        setCurrentUserBalance(data.balance || 0);
+      const response = await apiClient.get('/account-balance');
+      
+      if (import.meta.env.DEV) {
+        console.log('AddFunds - Balance API response:', response);
+        console.log('Response type:', typeof response);
+        console.log('Response keys:', Object.keys(response || {}));
       }
-    } catch (error) {
+      
+      // Handle response format from Netlify function
+      // apiClient interceptor returns response.data directly, so response is already the data
+      let balance = 0;
+      if (response.balance !== undefined) {
+        balance = response.balance;
+        if (import.meta.env.DEV) {
+          console.log('Found balance in response.balance:', balance);
+        }
+      } else if (response.data?.balance !== undefined) {
+        balance = response.data.balance;
+        if (import.meta.env.DEV) {
+          console.log('Found balance in response.data.balance:', balance);
+        }
+      } else if (typeof response === 'object' && response.balance !== undefined) {
+        balance = response.balance;
+        if (import.meta.env.DEV) {
+          console.log('Found balance in direct response:', balance);
+        }
+      }
+      
+      const finalBalance = parseFloat(balance) || 0;
+      setCurrentUserBalance(finalBalance);
+      
+      if (import.meta.env.DEV) {
+        console.log('AddFunds - Balance loaded and set:', finalBalance);
+      }
+    } catch (error: any) {
       console.error('Failed to fetch balance:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
       setCurrentUserBalance(0);
     }
   };
