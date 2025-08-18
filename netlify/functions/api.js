@@ -1156,6 +1156,36 @@ exports.handler = async (event, context) => {
           };
         }
 
+        // Check if we're in test mode (Swychr test payments)
+        const isTestMode = String(process.env.TEST_MODE || '').toLowerCase() === 'true';
+        
+        if (isTestMode && reference.startsWith('test-')) {
+          // Return test payment data for Swychr test payments
+          console.log('Returning test payment data for reference:', reference);
+          const testPayment = {
+            id: 'test-payment-id',
+            reference: reference,
+            user_id: userId,
+            amount: 1000, // $10.00 in cents
+            currency: 'USD',
+            status: 'completed',
+            payment_method: 'swychr_test',
+            description: 'Test payment via Swychr',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          return {
+            statusCode: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              success: true,
+              transaction: testPayment,
+              test_mode: true
+            })
+          };
+        }
+        
         // Get payment details from add_funds_payments table
         const { data: payment, error: fetchError } = await supabaseAdmin
           .from('add_funds_payments')

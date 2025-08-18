@@ -78,7 +78,7 @@ exports.handler = async (event, context) => {
           amount: 1000,
           currency: 'USD',
           payment_date: new Date().toISOString(),
-          reference: `test-ref-${transaction_id}`
+          reference: `test-${transaction_id}`
         },
         message: 'Test payment status retrieved successfully (forced test mode)',
         test_mode: true,
@@ -105,7 +105,7 @@ exports.handler = async (event, context) => {
           amount: 1000,
           currency: 'USD',
           payment_date: new Date().toISOString(),
-          reference: 'test-ref-fallback'
+          reference: 'test-fallback'
         },
         message: 'Test payment status retrieved successfully (fallback from error)',
         test_mode: true,
