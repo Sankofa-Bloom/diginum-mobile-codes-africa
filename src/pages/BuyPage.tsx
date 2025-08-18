@@ -133,6 +133,13 @@ const BuyPage = () => {
     }
   }, [isAuthenticated]);
 
+  // Debug effect to log balance changes
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log('🔄 accountBalance state changed to:', accountBalance);
+    }
+  }, [accountBalance]);
+
   const loadAccountBalance = async () => {
     setLoadingBalance(true);
     try {
@@ -175,6 +182,7 @@ const BuyPage = () => {
       
       if (import.meta.env.DEV) {
         console.log('Account balance loaded and set:', finalBalance);
+        console.log('State will be updated to:', finalBalance);
       }
       
       if (finalBalance > 0) {
