@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import apiClient from '@/lib/apiClient';
+import { supabase } from '@/lib/supabaseClient';
 import LanguageToggle from '@/components/LanguageToggle';
 
 interface AddFundsProps {
@@ -66,24 +67,24 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
       // Handle response format from Netlify function
       // apiClient interceptor returns response.data directly, so response is already the data
       let balance = 0;
-      if (response.balance !== undefined) {
-        balance = response.balance;
+      if ((response as any).balance !== undefined) {
+        balance = (response as any).balance;
         if (import.meta.env.DEV) {
           console.log('Found balance in response.balance:', balance);
         }
-      } else if (response.data?.balance !== undefined) {
-        balance = response.data.balance;
+      } else if ((response as any).data?.balance !== undefined) {
+        balance = (response as any).data.balance;
         if (import.meta.env.DEV) {
           console.log('Found balance in response.data.balance:', balance);
         }
-      } else if (typeof response === 'object' && response.balance !== undefined) {
-        balance = response.balance;
+      } else if (typeof response === 'object' && (response as any).balance !== undefined) {
+        balance = (response as any).balance;
         if (import.meta.env.DEV) {
           console.log('Found balance in direct response:', balance);
         }
       }
       
-      const finalBalance = parseFloat(balance) || 0;
+      const finalBalance = parseFloat(balance.toString()) || 0;
       setCurrentUserBalance(finalBalance);
       
       if (import.meta.env.DEV) {
@@ -123,10 +124,8 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
       // Create payment record in payment_transactions table
       const reference = `PAY_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      const { error: paymentError } = await supabase
-        .from('payment_transactions')
-        .insert([{
-          user_id: user.id,
+      try {
+        const paymentResponse = await apiClient.post('/payment-transactions', {
           reference: reference,
           amount: numAmount,
           currency: 'USD',
@@ -135,10 +134,13 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
           description: isOrderPayment 
             ? `Payment for ${orderData.serviceTitle} - $${numAmount} USD`
             : `Add funds to DigiNum account - $${numAmount} USD`
-        }]);
+        });
 
-      if (paymentError) {
-        throw new Error(`Failed to create payment record: ${paymentError.message}`);
+        if (!(paymentResponse as any).success) {
+          throw new Error('Failed to create payment record');
+        }
+      } catch (error: any) {
+        throw new Error(`Failed to create payment record: ${error.message}`);
       }
 
       // Create Swychr payment link
@@ -198,77 +200,20 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
     try {
       console.log(`Attempting to credit user ${userId} with amount ${amount}`);
       
-      // Check if user has existing balance
-      const { data: existingBalance, error: balanceError } = await supabase
-        .from('user_balances')
-        .select('balance')
-        .eq('user_id', userId)
-        .eq('currency', 'USD')
-        .single();
+      // Use the Netlify function to credit balance
+      const response = await apiClient.post('/credit-balance', {
+        amount: amount,
+        currency: 'USD'
+      });
 
-      if (balanceError && balanceError.code === 'PGRST116') {
-        // Create new balance record
-        console.log('Creating new balance record');
-        const { error: insertError } = await supabase
-          .from('user_balances')
-          .insert([{
-            user_id: userId,
-            balance: amount,
-            currency: 'USD',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }]);
-          
-        if (insertError) {
-          console.error('Failed to create balance record:', insertError);
-          throw new Error(`Failed to create balance record: ${insertError.message}`);
-        }
-        
-        console.log('Balance record created successfully');
-      } else if (!balanceError) {
-        // Update existing balance
-        const currentBalance = existingBalance.balance || 0;
-        const newBalance = currentBalance + amount;
-        
-        console.log(`Updating existing balance from ${currentBalance} to ${newBalance}`);
-        
-        const { error: updateError } = await supabase
-          .from('user_balances')
-          .update({ 
-            balance: newBalance,
-            updated_at: new Date().toISOString()
-          })
-          .eq('user_id', userId)
-          .eq('currency', 'USD');
-          
-        if (updateError) {
-          console.error('Failed to update balance:', updateError);
-          throw new Error(`Failed to update balance: ${updateError.message}`);
-        }
-        
-        console.log('Balance updated successfully');
+      if ((response as any).success) {
+        console.log('Balance credited successfully:', (response as any).new_balance);
+        return (response as any).new_balance;
       } else {
-        // Some other error occurred
-        console.error('Error checking balance:', balanceError);
-        throw new Error(`Failed to check balance: ${balanceError.message}`);
+        throw new Error('Failed to credit balance');
       }
-      
-      // Verify the balance was updated
-      const { data: verifyBalance, error: verifyError } = await supabase
-        .from('user_balances')
-        .select('balance')
-        .eq('user_id', userId)
-        .eq('currency', 'USD')
-        .single();
-        
-      if (verifyError) {
-        console.error('Failed to verify balance update:', verifyError);
-      } else {
-        console.log(`Balance verification: ${verifyBalance.balance}`);
-      }
-      
     } catch (error) {
-      console.error('Failed to credit user balance:', error);
+      console.error('Error crediting balance:', error);
       throw error;
     }
   };
@@ -390,69 +335,65 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
     if (!transactionId || !user) return;
 
     try {
-      // Update payment status to completed
-      const { error: updateError } = await supabase
-        .from('payment_transactions')
-        .update({ status: 'completed' })
-        .eq('reference', transactionId);
+      // Update payment status to completed using Netlify function
+      try {
+        const updateResponse = await apiClient.post('/update-payment-status', {
+          reference: transactionId,
+          status: 'completed'
+        });
 
-      if (updateError) {
-        console.error('Failed to update payment status:', updateError);
+        if (!(updateResponse as any).success) {
+          console.error('Failed to update payment status');
+          return;
+        }
+      } catch (error: any) {
+        console.error('Failed to update payment status:', error);
         return;
       }
 
-      // Get the payment amount
-      const { data: paymentData } = await supabase
-        .from('payment_transactions')
-        .select('amount')
-        .eq('reference', transactionId)
-        .single();
+      // Get the payment amount using Netlify function
+      try {
+        const paymentResponse = await apiClient.get(`/payment-details?reference=${transactionId}`);
+        
+        if ((paymentResponse as any).success && (paymentResponse as any).transaction) {
+          const paymentAmount = (paymentResponse as any).transaction.amount;
+          
+          // Credit user balance
+          await creditUserBalance(user.id, paymentAmount);
 
-      if (paymentData) {
-        // Credit user balance
-        await creditUserBalance(user.id, paymentData.amount);
+          // Store the payment time for balance refresh detection
+          localStorage.setItem('lastPaymentTime', Date.now().toString());
 
-        // Store the payment time for balance refresh detection
-        localStorage.setItem('lastPaymentTime', Date.now().toString());
-
-        toast({
-          title: "Payment Successful!",
-          description: `$${paymentData.amount} has been added to your account.`,
-        });
-
-        // Call the callback to update parent component
-        onFundsAdded?.(paymentData.amount);
-
-        // Update local balance state
-        if (currentUserBalance !== null) {
-          setCurrentUserBalance(currentUserBalance + paymentData.amount);
-        }
-
-        // Clear payment link and transaction ID
-        setPaymentLink(null);
-        setTransactionId(null);
-
-        // Redirect to dashboard
-        if (isOrderPayment) {
-          navigate('/dashboard', { 
-            state: { 
-              message: `Payment successful! Your order for ${orderData.serviceTitle} is being processed.` 
-            } 
+          toast({
+            title: "Payment Successful!",
+            description: `$${paymentAmount} has been added to your account.`,
           });
+
+          // Call the callback to update parent component
+          onFundsAdded?.(paymentAmount);
+
+          // Refresh the current balance display
+          fetchCurrentBalance();
+
+          // Clear the payment link and transaction ID
+          setPaymentLink(null);
+          setTransactionId(null);
         } else {
-          navigate('/dashboard', { 
-            state: { 
-              message: `$${paymentData.amount} has been successfully added to your account!` 
-            } 
-          });
+          throw new Error('Failed to get payment details');
         }
+      } catch (error: any) {
+        console.error('Failed to get payment details:', error);
+        toast({
+          title: "Error",
+          description: "Payment was successful but we couldn't retrieve the details. Please contact support.",
+          variant: "destructive",
+        });
       }
-
     } catch (error) {
-      console.error('Payment success handling error:', error);
+      console.error('Error handling payment success:', error);
       toast({
         title: "Error",
-        description: "Failed to process successful payment",
+        description: "There was an error processing your payment. Please contact support.",
         variant: "destructive",
       });
     }

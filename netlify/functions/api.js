@@ -810,6 +810,355 @@ exports.handler = async (event, context) => {
       }
     }
 
+    // Payment transactions endpoint (requires authentication)
+    if (endpoint === 'payment-transactions' && httpMethod === 'POST') {
+      try {
+        // Check for authorization header
+        const authHeader = headers.authorization || headers.Authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return {
+            statusCode: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Authentication required' })
+          };
+        }
+
+        const token = authHeader.split(' ')[1];
+        
+        // Verify token with Supabase and get user
+        const { data: userData, error: userError } = await supabase.auth.getUser(token);
+        if (userError || !userData.user) {
+          return {
+            statusCode: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Invalid authentication token' })
+          };
+        }
+
+        const userId = userData.user.id;
+        const { reference, amount, currency, payment_method, status, description } = requestBody;
+
+        if (!reference || !amount || !currency || !payment_method || !status) {
+          return {
+            statusCode: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Missing required fields' })
+          };
+        }
+
+        // Create payment transaction record
+        const { data: transaction, error: insertError } = await supabase
+          .from('payment_transactions')
+          .insert([{
+            user_id: userId,
+            reference: reference,
+            amount: amount,
+            currency: currency,
+            payment_method: payment_method,
+            status: status,
+            description: description || `Payment transaction - ${reference}`
+          }])
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('Error creating payment transaction:', insertError);
+          return {
+            statusCode: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Failed to create payment transaction' })
+          };
+        }
+
+        return {
+          statusCode: 201,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            success: true,
+            transaction: transaction,
+            message: 'Payment transaction created successfully'
+          })
+        };
+      } catch (error) {
+        console.error('Error creating payment transaction:', error);
+        return {
+          statusCode: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Failed to create payment transaction' })
+        };
+      }
+    }
+
+    // Credit user balance endpoint (requires authentication)
+    if (endpoint === 'credit-balance' && httpMethod === 'POST') {
+      try {
+        // Check for authorization header
+        const authHeader = headers.authorization || headers.Authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return {
+            statusCode: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Authentication required' })
+          };
+        }
+
+        const token = authHeader.split(' ')[1];
+        
+        // Verify token with Supabase and get user
+        const { data: userData, error: userError } = await supabase.auth.getUser(token);
+        if (userError || !userData.user) {
+          return {
+            statusCode: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Invalid authentication token' })
+          };
+        }
+
+        const userId = userData.user.id;
+        const { amount, currency = 'USD' } = requestBody;
+
+        if (!amount || amount <= 0) {
+          return {
+            statusCode: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Invalid amount' })
+          };
+        }
+
+        // Check if user has existing balance
+        const { data: existingBalance, error: balanceError } = await supabase
+          .from('user_balances')
+          .select('balance')
+          .eq('user_id', userId)
+          .eq('currency', currency)
+          .single();
+
+        let newBalance = amount;
+
+        if (balanceError && balanceError.code === 'PGRST116') {
+          // Create new balance record
+          const { data: insertResult, error: insertError } = await supabase
+            .from('user_balances')
+            .insert([{
+              user_id: userId,
+              balance: amount,
+              currency: currency
+            }])
+            .select('balance')
+            .single();
+
+          if (insertError) {
+            console.error('Failed to create balance record:', insertError);
+            return {
+              statusCode: 500,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ error: 'Failed to credit balance' })
+            };
+          }
+          
+          newBalance = insertResult.balance;
+        } else if (balanceError) {
+          console.error('Error fetching existing balance:', balanceError);
+          return {
+            statusCode: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Failed to fetch balance' })
+          };
+        } else {
+          // Update existing balance
+          const currentBalance = existingBalance.balance || 0;
+          newBalance = currentBalance + amount;
+          
+          const { data: updateResult, error: updateError } = await supabase
+            .from('user_balances')
+            .update({ 
+              balance: newBalance,
+              updated_at: new Date().toISOString()
+            })
+            .eq('user_id', userId)
+            .eq('currency', currency)
+            .select('balance')
+            .single();
+
+          if (updateError) {
+            console.error('Failed to update balance:', updateError);
+            return {
+              statusCode: 500,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ error: 'Failed to credit balance' })
+            };
+          }
+          
+          newBalance = updateResult.balance;
+        }
+
+        return {
+          statusCode: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            success: true,
+            new_balance: newBalance,
+            message: `Balance credited successfully. New balance: $${newBalance}`,
+            currency: currency
+          })
+        };
+      } catch (error) {
+        console.error('Error crediting balance:', error);
+        return {
+          statusCode: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Failed to credit balance' })
+        };
+      }
+    }
+
+    // Update payment transaction status endpoint (requires authentication)
+    if (endpoint === 'update-payment-status' && httpMethod === 'POST') {
+      try {
+        // Check for authorization header
+        const authHeader = headers.authorization || headers.Authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return {
+            statusCode: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Authentication required' })
+          };
+        }
+
+        const token = authHeader.split(' ')[1];
+        
+        // Verify token with Supabase and get user
+        const { data: userData, error: userError } = await supabase.auth.getUser(token);
+        if (userError || !userData.user) {
+          return {
+            statusCode: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Invalid authentication token' })
+          };
+        }
+
+        const userId = userData.user.id;
+        const { reference, status } = requestBody;
+
+        if (!reference || !status) {
+          return {
+            statusCode: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Missing required fields' })
+          };
+        }
+
+        // Update payment transaction status
+        const { data: transaction, error: updateError } = await supabase
+          .from('payment_transactions')
+          .update({ 
+            status: status,
+            updated_at: new Date().toISOString()
+          })
+          .eq('reference', reference)
+          .eq('user_id', userId)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error('Error updating payment transaction:', updateError);
+          return {
+            statusCode: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Failed to update payment transaction' })
+          };
+        }
+
+        return {
+          statusCode: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            success: true,
+            transaction: transaction,
+            message: 'Payment transaction updated successfully'
+          })
+        };
+      } catch (error) {
+        console.error('Error updating payment transaction:', error);
+        return {
+          statusCode: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Failed to update payment transaction' })
+        };
+      }
+    }
+
+    // Get payment transaction details endpoint (requires authentication)
+    if (endpoint === 'payment-details' && httpMethod === 'GET') {
+      try {
+        // Check for authorization header
+        const authHeader = headers.authorization || headers.Authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return {
+            statusCode: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Authentication required' })
+          };
+        }
+
+        const token = authHeader.split(' ')[1];
+        
+        // Verify token with Supabase and get user
+        const { data: userData, error: userError } = await supabase.auth.getUser(token);
+        if (userError || !userData.user) {
+          return {
+            statusCode: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Invalid authentication token' })
+          };
+        }
+
+        const userId = userData.user.id;
+        const reference = event.queryStringParameters?.reference;
+
+        if (!reference) {
+          return {
+            statusCode: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Missing reference parameter' })
+          };
+        }
+
+        // Get payment transaction details
+        const { data: transaction, error: fetchError } = await supabase
+          .from('payment_transactions')
+          .select('*')
+          .eq('reference', reference)
+          .eq('user_id', userId)
+          .single();
+
+        if (fetchError) {
+          console.error('Error fetching payment transaction:', fetchError);
+          return {
+            statusCode: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Failed to fetch payment transaction' })
+          };
+        }
+
+        return {
+          statusCode: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            success: true,
+            transaction: transaction
+          })
+        };
+      } catch (error) {
+        console.error('Error fetching payment transaction:', error);
+        return {
+          statusCode: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Failed to fetch payment transaction' })
+        };
+      }
+    }
+
     // Health check - handle both empty path and /health
     if ((endpoint === 'health' || endpoint === '' || pathAfterFunction === '/') && httpMethod === 'GET') {
       return {
