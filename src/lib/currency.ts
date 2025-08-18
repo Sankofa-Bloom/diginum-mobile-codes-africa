@@ -190,7 +190,7 @@ export class CurrencyService {
       'EGP': 5.0,
       'KES': 5.0,
       'GHS': 5.0,
-      'XAF': 2.0 // Cameroon and Central African countries
+      'XAF': 19.0 // Cameroon and Central African countries
     };
 
     return vatRates[currency] || 5.0; // Default to 5% VAT
@@ -215,7 +215,8 @@ export class CurrencyService {
       { currency: 'NGN', rate: 920.00, vat: 5.0, updated_at: new Date().toISOString() },
       { currency: 'EGP', rate: 31.20, vat: 5.0, updated_at: new Date().toISOString() },
       { currency: 'KES', rate: 158.50, vat: 5.0, updated_at: new Date().toISOString() },
-      { currency: 'GHS', rate: 12.45, vat: 5.0, updated_at: new Date().toISOString() }
+      { currency: 'GHS', rate: 12.45, vat: 5.0, updated_at: new Date().toISOString() },
+      { currency: 'XAF', rate: 563.34, vat: 19.0, updated_at: new Date().toISOString() } // Cameroon default
     ];
   }
 

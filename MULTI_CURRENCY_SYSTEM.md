@@ -52,7 +52,7 @@ This document describes the implementation of a multi-currency system for DigiNu
 ## Configuration
 
 ### Country-Specific Defaults
-- **Cameroon**: Automatically sets XAF (Central African CFA franc) as default currency
+- **Cameroon**: Automatically sets XAF (Central African CFA franc) as default currency with 19% VAT
 - **Other Countries**: Uses their local currency or USD as fallback
 
 ### Environment Variables
@@ -152,6 +152,18 @@ CREATE TABLE payment_transactions (
 2. **Rate Validation**: Rates validated before use in calculations
 3. **API Key Protection**: Fixer API key stored in environment variables
 4. **Input Validation**: All currency inputs validated and sanitized
+
+## VAT Rates by Region
+
+- **USD**: 0% (United States)
+- **EUR**: 5% (European Union)
+- **GBP**: 5% (United Kingdom)
+- **XAF**: 19% (Cameroon and Central Africa)
+- **NGN**: 5% (Nigeria)
+- **KES**: 5% (Kenya)
+- **GHS**: 5% (Ghana)
+- **EGP**: 5% (Egypt)
+- **Other Currencies**: 3-5% (varies by region)
 
 ## Testing
 
