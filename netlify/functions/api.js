@@ -810,7 +810,7 @@ exports.handler = async (event, context) => {
       }
     }
 
-    // Payment transactions endpoint (requires authentication)
+    // Payment endpoints that work directly with the database
     if (endpoint === 'payment-transactions' && httpMethod === 'POST') {
       try {
         console.log('=== PAYMENT TRANSACTIONS ENDPOINT START ===');
@@ -856,7 +856,7 @@ exports.handler = async (event, context) => {
           };
         }
 
-        console.log('Attempting to create payment transaction...');
+        console.log('Creating payment transaction in database...');
         
         // Create payment transaction record in the existing add_funds_payments table
         const { data: transaction, error: insertError } = await supabase
@@ -878,19 +878,6 @@ exports.handler = async (event, context) => {
 
         if (insertError) {
           console.error('Error creating payment transaction:', insertError);
-          
-          // If it's a table doesn't exist error, provide a helpful message
-          if (insertError.code === '42P01') { // undefined_table
-            return {
-              statusCode: 500,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                error: 'Payment system not properly configured',
-                message: 'The payment transactions table is missing. Please contact support.'
-              })
-            };
-          }
-          
           return {
             statusCode: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -913,12 +900,11 @@ exports.handler = async (event, context) => {
           })
         };
       } catch (error) {
-        console.error('Error creating payment transaction:', error);
-        console.error('Error stack:', error.stack);
+        console.error('Error in payment-transactions endpoint:', error);
         return {
           statusCode: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ error: 'Failed to create payment transaction' })
+          body: JSON.stringify({ error: 'Internal server error' })
         };
       }
     }
@@ -959,6 +945,8 @@ exports.handler = async (event, context) => {
           };
         }
 
+        console.log('Crediting user balance...');
+        
         // Check if user has existing balance
         const { data: existingBalance, error: balanceError } = await supabase
           .from('user_balances')
@@ -1037,11 +1025,11 @@ exports.handler = async (event, context) => {
           })
         };
       } catch (error) {
-        console.error('Error crediting balance:', error);
+        console.error('Error in credit-balance endpoint:', error);
         return {
           statusCode: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ error: 'Failed to credit balance' })
+          body: JSON.stringify({ error: 'Internal server error' })
         };
       }
     }
@@ -1082,6 +1070,8 @@ exports.handler = async (event, context) => {
           };
         }
 
+        console.log('Updating payment status...');
+        
         // Update payment status in add_funds_payments table
         const { data: updatedPayment, error: updateError } = await supabase
           .from('add_funds_payments')
@@ -1113,11 +1103,11 @@ exports.handler = async (event, context) => {
           })
         };
       } catch (error) {
-        console.error('Error updating payment transaction:', error);
+        console.error('Error in update-payment-status endpoint:', error);
         return {
           statusCode: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ error: 'Failed to update payment transaction' })
+          body: JSON.stringify({ error: 'Internal server error' })
         };
       }
     }
