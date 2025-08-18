@@ -4,14 +4,16 @@ const bcrypt = require('bcrypt');
 // Initialize Supabase clients
 // - supabase: for auth (uses anon key)
 // - supabaseAdmin: for privileged DB ops after verifying user (bypasses RLS)
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
-const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Supabase env missing. Required: SUPABASE_URL and SUPABASE_ANON_KEY (or VITE_SUPABASE_ANON_KEY/SUPABASE_KEY)');
+}
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey);
 
 // Helper function to send CORS headers
 const corsHeaders = {
