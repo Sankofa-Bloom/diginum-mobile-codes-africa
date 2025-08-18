@@ -69,11 +69,12 @@ exports.handler = async (event, context) => {
 
     const data = await response.json();
 
-    if (data.status !== 200) {
+    // According to API docs, success is indicated by status: 0, not 200
+    if (data.status !== 0) {
       throw new Error(data.message || 'Swychr authentication failed');
     }
 
-    // Return the auth token
+    // Return the authentication data
     return {
       statusCode: 200,
       headers: {
@@ -82,7 +83,7 @@ exports.handler = async (event, context) => {
       },
       body: JSON.stringify({
         success: true,
-        token: data.data.token,
+        data: data.data || {},
         message: 'Authentication successful',
       }),
     };
@@ -92,7 +93,10 @@ exports.handler = async (event, context) => {
     
     return {
       statusCode: 500,
-      headers: corsHeaders,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({
         error: 'Authentication failed',
         message: error.message,

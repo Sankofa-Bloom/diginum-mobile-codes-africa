@@ -69,11 +69,12 @@ exports.handler = async (event, context) => {
 
     const authData = await authResponse.json();
 
-    if (authData.status !== 200) {
+    // According to API docs, success is indicated by status: 0, not 200
+    if (authData.status !== 0) {
       throw new Error(authData.message || 'Swychr authentication failed');
     }
 
-    const authToken = authData.data.token;
+    const authToken = authData.data?.token || authData.token;
 
     // Check payment status
     const statusResponse = await fetch(`${swychrBaseURL}/payment_link_status`, {
@@ -91,7 +92,8 @@ exports.handler = async (event, context) => {
 
     const statusData = await statusResponse.json();
 
-    if (statusData.status !== 200) {
+    // According to API docs, success is indicated by status: 0, not 200
+    if (statusData.status !== 0) {
       throw new Error(statusData.message || 'Failed to check payment status');
     }
 
@@ -104,7 +106,7 @@ exports.handler = async (event, context) => {
       },
       body: JSON.stringify({
         success: true,
-        data: statusData.data,
+        data: statusData.data || {},
         message: 'Payment status retrieved successfully',
       }),
     };
@@ -114,7 +116,10 @@ exports.handler = async (event, context) => {
     
     return {
       statusCode: 500,
-      headers: corsHeaders,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({
         error: 'Failed to check payment status',
         message: error.message,

@@ -111,7 +111,7 @@ exports.handler = async (event, context) => {
       console.log('Running in test mode - returning mock response');
       return {
         statusCode: 200,
-        headers: corsHeaders,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           success: true,
           data: {
@@ -150,7 +150,8 @@ exports.handler = async (event, context) => {
     const authData = await authResponse.json();
     console.log('Auth response data:', JSON.stringify(authData, null, 2));
 
-    if (authData.status !== 200) {
+    // According to API docs, success is indicated by status: 0, not 200
+    if (authData.status !== 0) {
       throw new Error(authData.message || 'Swychr authentication failed');
     }
 
@@ -165,22 +166,28 @@ exports.handler = async (event, context) => {
 
     // Create payment link
     console.log('Creating payment link...');
+    
+    // Prepare payment data according to API spec
+    const paymentPayload = {
+      country_code,
+      name,
+      email,
+      mobile: mobile || '', // Optional field
+      amount: Math.round(amount * 100), // Convert to cents as integer
+      transaction_id,
+      description: description || `Payment for ${name}`,
+      pass_digital_charge
+    };
+    
+    console.log('Payment payload:', paymentPayload);
+    
     const paymentResponse = await fetch(`${swychrBaseURL}/create_payment_links`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${authToken}`,
       },
-      body: JSON.stringify({
-        country_code,
-        name,
-        email,
-        mobile,
-        amount: Math.round(amount * 100), // Convert to cents
-        transaction_id,
-        description: description || `Payment for ${name}`,
-        pass_digital_charge,
-      }),
+      body: JSON.stringify(paymentPayload),
     });
 
     console.log('Payment response status:', paymentResponse.status);
@@ -195,7 +202,8 @@ exports.handler = async (event, context) => {
     const paymentData = await paymentResponse.json();
     console.log('Payment response data:', JSON.stringify(paymentData, null, 2));
 
-    if (paymentData.status !== 200) {
+    // According to API docs, success is indicated by status: 0, not 200
+    if (paymentData.status !== 0) {
       throw new Error(paymentData.message || 'Failed to create payment link');
     }
 
@@ -210,8 +218,9 @@ exports.handler = async (event, context) => {
       },
       body: JSON.stringify({
         success: true,
-        data: paymentData.data,
+        data: paymentData.data || {},
         message: 'Payment link created successfully',
+        swychr_response: paymentData
       }),
     };
 
@@ -221,7 +230,10 @@ exports.handler = async (event, context) => {
     
     return {
       statusCode: 500,
-      headers: corsHeaders,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({
         error: 'Failed to create payment link',
         message: error.message,
