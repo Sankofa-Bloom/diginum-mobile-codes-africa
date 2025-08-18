@@ -858,38 +858,8 @@ exports.handler = async (event, context) => {
 
         console.log('Attempting to create payment transaction...');
         
-        // First, ensure the simple_payments table exists
-        try {
-          const { error: createTableError } = await supabase.rpc('exec_sql', {
-            sql: `
-              CREATE TABLE IF NOT EXISTS simple_payments (
-                id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-                user_id UUID NOT NULL,
-                reference VARCHAR(255) UNIQUE NOT NULL,
-                amount DECIMAL(10,2) NOT NULL,
-                currency VARCHAR(3) NOT NULL DEFAULT 'USD',
-                payment_method VARCHAR(50) NOT NULL,
-                status VARCHAR(20) NOT NULL DEFAULT 'pending',
-                description TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-              );
-              
-              -- Create indexes
-              CREATE INDEX IF NOT EXISTS idx_simple_payments_user_id ON simple_payments(user_id);
-              CREATE INDEX IF NOT EXISTS idx_simple_payments_reference ON simple_payments(reference);
-              CREATE INDEX IF NOT EXISTS idx_simple_payments_status ON simple_payments(status);
-            `
-          });
-          
-          if (createTableError) {
-            console.log('Table creation error (might already exist):', createTableError);
-          }
-        } catch (tableError) {
-          console.log('Table creation failed (might already exist):', tableError);
-        }
-        
-        // Create payment transaction record in simple_payments table
+        // Try to create payment transaction record in simple_payments table
+        // If the table doesn't exist, this will fail and we'll get a clear error
         const { data: transaction, error: insertError } = await supabase
           .from('simple_payments')
           .insert([{
@@ -906,10 +876,26 @@ exports.handler = async (event, context) => {
 
         if (insertError) {
           console.error('Error creating payment transaction:', insertError);
+          
+          // If it's a table doesn't exist error, provide a helpful message
+          if (insertError.code === '42P01') { // undefined_table
+            return {
+              statusCode: 500,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                error: 'Payment system not properly configured',
+                message: 'The payment transactions table is missing. Please contact support.'
+              })
+            };
+          }
+          
           return {
             statusCode: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ error: 'Failed to create payment transaction' })
+            body: JSON.stringify({ 
+              error: 'Failed to create payment transaction',
+              details: insertError.message
+            })
           };
         }
 
