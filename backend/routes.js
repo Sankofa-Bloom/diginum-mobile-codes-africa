@@ -1128,8 +1128,8 @@ export default async function routes(fastify, opts) {
     }
   });
 
-  // Simple Fapshi webhook endpoint
-  fastify.post('/api/webhook/fapshi', async (request, reply) => {
+  // Simple Swychr webhook endpoint
+  fastify.post('/api/webhook/swychr', async (request, reply) => {
     try {
       const { reference, status, amount, currency } = request.body;
       
@@ -1137,9 +1137,9 @@ export default async function routes(fastify, opts) {
         return reply.code(400).send({ error: 'Missing required fields' });
       }
 
-      // Update payment status
+      // Update payment status in add_funds_payments table
       const { error: updateError } = await fastify.supabase
-        .from('fapshi_payments')
+        .from('add_funds_payments')
         .update({ 
           status: status,
           updated_at: new Date().toISOString()
@@ -1153,7 +1153,7 @@ export default async function routes(fastify, opts) {
 
       return reply.code(200).send({ received: true });
     } catch (error) {
-      fastify.log.error('Error processing Fapshi webhook:', error);
+      fastify.log.error('Error processing Swychr webhook:', error);
       return reply.code(500).send({ error: 'Internal server error' });
     }
   });
@@ -1313,8 +1313,8 @@ export default async function routes(fastify, opts) {
     return { paymentId: request.params.paymentId, status: 'completed' };
   });
 
-  // Fapshi Payment Gateway Routes (XAF Currency Support)
-  fastify.post('/api/payment/fapshi/initialize', { preHandler: requireAuth }, async (request, reply) => {
+  // Swychr Payment Gateway Routes (Multi-Currency Support)
+  fastify.post('/api/payment/swychr/initialize', { preHandler: requireAuth }, async (request, reply) => {
     try {
       const { amount, currency, email, name, phone, description, redirectUrl } = request.body;
       
@@ -1325,44 +1325,36 @@ export default async function routes(fastify, opts) {
         });
       }
 
-      // Validate currency support
-      if (currency !== 'XAF') {
-        return reply.code(400).send({ 
-          error: 'Fapshi only supports XAF currency' 
-        });
-      }
-
       // Generate unique reference
       const reference = `DIGINUM_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
       
-      // Initialize Fapshi payment
-      const fapshiPayload = {
-        amount: Math.round(amount * 100), // Convert to centimes
+      // Initialize Swychr payment
+      const swychrPayload = {
+        amount: Math.round(amount), // Swychr expects integer amount
         currency: currency,
         email: email,
         name: name,
-        phone: phone,
+        phone: phone || '',
         description: description || 'DigiNum SMS Service Payment',
         reference: reference,
         redirect_url: redirectUrl || `${process.env.FRONTEND_URL}/payment/success`,
-        webhook_url: `${process.env.BACKEND_URL}/api/payment/fapshi/webhook`,
+        webhook_url: `${process.env.BACKEND_URL}/api/webhook/swychr`,
       };
 
-      // Make request to Fapshi API
-      const fapshiResponse = await fetch(`${process.env.FAPSHI_BASE_URL}/payments/initialize`, {
+      // Make request to Swychr API
+      const swychrResponse = await fetch(`${process.env.SWYCHR_BASE_URL}/create_payment_links`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.FAPSHI_SECRET_KEY}`,
-          'X-Public-Key': process.env.FAPSHI_PUBLIC_KEY,
+          'Authorization': `Bearer ${process.env.SWYCHR_AUTH_TOKEN}`,
         },
-        body: JSON.stringify(fapshiPayload),
+        body: JSON.stringify(swychrPayload),
       });
 
-      const result = await fapshiResponse.json();
+      const result = await swychrResponse.json();
 
-      if (!fapshiResponse.ok) {
-        fastify.log.error('Fapshi payment initialization failed:', result);
+      if (!swychrResponse.ok || result.status !== 0) {
+        fastify.log.error('Swychr payment initialization failed:', result);
         return reply.code(400).send({
           error: result.message || 'Payment initialization failed',
         });
@@ -1370,17 +1362,18 @@ export default async function routes(fastify, opts) {
 
       // Store payment record in database
       const { data: paymentRecord, error: dbError } = await fastify.supabase
-        .from('payments')
+        .from('add_funds_payments')
         .insert([{
           user_id: request.user.id,
-          provider: 'fapshi',
-          provider_transaction_id: result.data.id,
-          reference: reference,
-          amount: amount,
+          amount_usd: amount,
+          amount_original: amount,
           currency: currency,
+          phone_number: phone || 'N/A',
+          reference: reference,
           status: 'pending',
-          provider_response: JSON.stringify(result),
-          created_at: new Date().toISOString(),
+          campay_transaction_id: null,
+          exchange_rate: 1.0,
+          markup: 0.0
         }])
         .select()
         .single();
@@ -1404,30 +1397,33 @@ export default async function routes(fastify, opts) {
       });
 
     } catch (error) {
-      fastify.log.error('Fapshi payment initialization error:', error);
+      fastify.log.error('Swychr payment initialization error:', error);
       return reply.code(500).send({
         error: 'Internal server error during payment initialization',
       });
     }
   });
 
-  // Fapshi payment verification
-  fastify.get('/api/payment/fapshi/verify/:transactionId', { preHandler: requireAuth }, async (request, reply) => {
+  // Swychr payment verification
+  fastify.get('/api/payment/swychr/verify/:transactionId', { preHandler: requireAuth }, async (request, reply) => {
     try {
       const { transactionId } = request.params;
 
-      // Verify payment with Fapshi
-      const verificationResponse = await fetch(`${process.env.FAPSHI_BASE_URL}/payments/${transactionId}/verify`, {
-        method: 'GET',
+      // Verify payment with Swychr
+      const verificationResponse = await fetch(`${process.env.SWYCHR_BASE_URL}/payment_link_status`, {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.FAPSHI_SECRET_KEY}`,
-          'X-Public-Key': process.env.FAPSHI_PUBLIC_KEY,
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.SWYCHR_AUTH_TOKEN}`,
         },
+        body: JSON.stringify({
+          transaction_id: transactionId
+        })
       });
 
       const result = await verificationResponse.json();
 
-      if (!verificationResponse.ok) {
+      if (!verificationResponse.ok || result.status !== 0) {
         return reply.code(400).send({
           error: result.message || 'Payment verification failed',
         });
@@ -1435,21 +1431,20 @@ export default async function routes(fastify, opts) {
 
       // Update payment record in database
       const { error: updateError } = await fastify.supabase
-        .from('payments')
+        .from('add_funds_payments')
         .update({
           status: result.data.status,
-          provider_response: JSON.stringify(result),
           updated_at: new Date().toISOString(),
         })
-        .eq('provider_transaction_id', transactionId);
+        .eq('reference', transactionId);
 
       if (updateError) {
         fastify.log.error('Database error updating payment:', updateError);
       }
 
       // If payment is successful, credit user balance
-      if (result.data.status === 'success') {
-        await creditUserBalance(fastify, request.user.id, result.data.amount / 100, result.data.currency);
+      if (result.data.status === 'completed') {
+        await creditUserBalance(fastify, request.user.id, result.data.amount, result.data.currency);
       }
 
       return reply.code(200).send({
@@ -1457,7 +1452,7 @@ export default async function routes(fastify, opts) {
         data: {
           transaction_id: result.data.id,
           reference: result.data.reference,
-          amount: result.data.amount / 100, // Convert back from centimes
+          amount: result.data.amount,
           currency: result.data.currency,
           status: result.data.status,
           message: 'Payment verification completed',
@@ -1465,19 +1460,19 @@ export default async function routes(fastify, opts) {
       });
 
     } catch (error) {
-      fastify.log.error('Fapshi payment verification error:', error);
+      fastify.log.error('Swychr payment verification error:', error);
       return reply.code(500).send({
         error: 'Internal server error during payment verification',
       });
     }
   });
 
-  // Fapshi webhook handler
-  fastify.post('/api/payment/fapshi/webhook', async (request, reply) => {
+  // Swychr webhook handler
+  fastify.post('/api/payment/swychr/webhook', async (request, reply) => {
     try {
       const webhookData = request.body;
       
-      fastify.log.info('Fapshi webhook received:', webhookData);
+      fastify.log.info('Swychr webhook received:', webhookData);
 
       // Validate webhook payload
       if (!webhookData.event || !webhookData.data) {
@@ -1488,13 +1483,12 @@ export default async function routes(fastify, opts) {
 
       // Update payment record in database
       const { error: updateError } = await fastify.supabase
-        .from('payments')
+        .from('add_funds_payments')
         .update({
           status: data.status,
-          provider_response: JSON.stringify(webhookData),
           updated_at: new Date().toISOString(),
         })
-        .eq('provider_transaction_id', data.transaction_id);
+        .eq('reference', data.reference);
 
       if (updateError) {
         fastify.log.error('Database error updating payment via webhook:', updateError);
@@ -1518,7 +1512,7 @@ export default async function routes(fastify, opts) {
       return reply.code(200).send({ received: true });
 
     } catch (error) {
-      fastify.log.error('Fapshi webhook processing error:', error);
+      fastify.log.error('Swychr webhook processing error:', error);
       return reply.code(500).send({
         error: 'Internal server error processing webhook',
       });
@@ -1616,7 +1610,7 @@ export default async function routes(fastify, opts) {
   fastify.get('/admin/payments', { preHandler: requireAuth }, async (request, reply) => {
     try {
       const { data, error } = await fastify.supabase
-        .from('payments')
+        .from('add_funds_payments')
         .select('*');
       if (error) throw error;
       return data;
@@ -2054,8 +2048,8 @@ export default async function routes(fastify, opts) {
     }
   });
 
-  // Simple Fapshi add funds endpoint
-  fastify.post('/add-funds/fapshi', { preHandler: requireAuth }, async (request, reply) => {
+  // Simple Swychr add funds endpoint
+  fastify.post('/add-funds/swychr', { preHandler: requireAuth }, async (request, reply) => {
     try {
       const { amount, currency = 'USD' } = request.body;
       const userId = request.user.id;
@@ -2065,16 +2059,21 @@ export default async function routes(fastify, opts) {
       }
 
       // Create payment record
-      const reference = `FAPSHI_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const reference = `SWYCHR_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       const { data: payment, error: paymentError } = await fastify.supabase
-        .from('fapshi_payments')
+        .from('add_funds_payments')
         .insert([{
           user_id: userId,
-          reference: reference,
-          amount: amount,
+          amount_usd: amount,
+          amount_original: amount,
           currency: currency,
-          status: 'pending'
+          phone_number: 'N/A',
+          reference: reference,
+          status: 'pending',
+          campay_transaction_id: null,
+          exchange_rate: 1.0,
+          markup: 0.0
         }])
         .select()
         .single();
@@ -2091,62 +2090,12 @@ export default async function routes(fastify, opts) {
       });
 
     } catch (error) {
-      fastify.log.error('Error creating Fapshi payment:', error);
+      fastify.log.error('Error creating Swychr payment:', error);
       return reply.code(500).send({ error: 'Internal server error' });
     }
   });
 
-      // Call Campay API to initiate payment
-      const campayResponse = await fetch('https://www.campay.net/api/collect/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Token ${process.env.CAMPAY_API_KEY}`
-        },
-        body: JSON.stringify({
-          amount: usdAmount,
-          currency: 'USD',
-          phone_number: phoneNumber,
-          reference: reference,
-          description: `Add funds to DigiNum account - ${amount} ${currency.toUpperCase()}`
-        })
-      });
-
-      const campayData = await campayResponse.json();
-
-      if (!campayResponse.ok) {
-        fastify.log.error('Campay API error:', campayData);
-        return reply.code(500).send({ error: 'Failed to initiate payment' });
-      }
-
-      // Update payment record with Campay transaction ID
-      await fastify.supabase
-        .from('add_funds_payments')
-        .update({ 
-          campay_transaction_id: campayData.transaction_id,
-          status: 'initiated'
-        })
-        .eq('id', payment.id);
-
-      return reply.code(200).send({
-        success: true,
-        transaction_id: campayData.transaction_id,
-        reference: reference,
-        amount_usd: usdAmount,
-        amount_original: amount,
-        currency: currency.toUpperCase(),
-        exchange_rate: exchangeRate,
-        markup: markup,
-        message: 'Payment record created successfully'
-      });
-
-    } catch (error) {
-      fastify.log.error('Error creating Fapshi payment:', error);
-      return reply.code(500).send({ error: 'Internal server error' });
-    }
-  });
-
-  // Check Fapshi payment status
+  // Check Swychr payment status
   fastify.get('/add-funds/status/:reference', { preHandler: requireAuth }, async (request, reply) => {
     try {
       const { reference } = request.params;
@@ -2154,7 +2103,7 @@ export default async function routes(fastify, opts) {
 
       // Get payment record
       const { data: payment, error: paymentError } = await fastify.supabase
-        .from('fapshi_payments')
+        .from('add_funds_payments')
         .select('*')
         .eq('reference', reference)
         .eq('user_id', userId)
@@ -2166,7 +2115,7 @@ export default async function routes(fastify, opts) {
 
       return reply.code(200).send({
         status: payment.status,
-        amount: payment.amount,
+        amount: payment.amount_usd,
         currency: payment.currency,
         reference: payment.reference
       });
@@ -2586,7 +2535,7 @@ export default async function routes(fastify, opts) {
     return serviceNames[serviceCode] || serviceCode.toUpperCase();
   }
 
-  // Fapshi Payment Helper Functions
+  // Swychr Payment Helper Functions
   async function creditUserBalance(fastify, userId, amount, currency) {
     try {
       // Credit the user's balance in user_balances table
@@ -2660,9 +2609,9 @@ export default async function routes(fastify, opts) {
       
       // Get payment record from database
       const { data: payment, error: paymentError } = await fastify.supabase
-        .from('payments')
+        .from('add_funds_payments')
         .select('*')
-        .eq('provider_transaction_id', paymentData.transaction_id)
+        .eq('reference', paymentData.reference)
         .single();
 
       if (paymentError) {
@@ -2671,7 +2620,7 @@ export default async function routes(fastify, opts) {
       }
 
       // Credit user balance
-      const creditResult = await creditUserBalance(fastify, payment.user_id, payment.amount, payment.currency);
+      const creditResult = await creditUserBalance(fastify, payment.user_id, payment.amount_usd, payment.currency);
       
       if (!creditResult.success) {
         fastify.log.error('Failed to credit user balance:', creditResult.error);
@@ -2702,15 +2651,15 @@ export default async function routes(fastify, opts) {
     }
   }
 
-  // Simple Fapshi payment verification
-  fastify.get('/api/payment/fapshi/verify/:reference', { preHandler: requireAuth }, async (request, reply) => {
+  // Simple Swychr payment verification
+  fastify.get('/api/payment/swychr/verify/:reference', { preHandler: requireAuth }, async (request, reply) => {
     try {
       const { reference } = request.params;
       const userId = request.user.id;
 
       // Get payment record from database
       const { data: payment, error: paymentError } = await fastify.supabase
-        .from('fapshi_payments')
+        .from('add_funds_payments')
         .select('*')
         .eq('reference', reference)
         .eq('user_id', userId)
@@ -2722,18 +2671,21 @@ export default async function routes(fastify, opts) {
         });
       }
 
-      // Verify payment with Fapshi
-      const verificationResponse = await fetch(`${process.env.FAPSHI_BASE_URL}/payments/status?reference=${reference}`, {
-        method: 'GET',
+      // Verify payment with Swychr
+      const verificationResponse = await fetch(`${process.env.SWYCHR_BASE_URL}/payment_link_status`, {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.FAPSHI_SECRET_KEY}`,
-          'X-Public-Key': process.env.FAPSHI_PUBLIC_KEY,
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.SWYCHR_AUTH_TOKEN}`,
         },
+        body: JSON.stringify({
+          transaction_id: reference
+        })
       });
 
       const result = await verificationResponse.json();
 
-      if (!verificationResponse.ok) {
+      if (!verificationResponse.ok || result.status !== 0) {
         return reply.code(400).send({
           error: result.message || 'Payment verification failed',
         });
@@ -2741,17 +2693,16 @@ export default async function routes(fastify, opts) {
 
       // Update payment status
       await fastify.supabase
-        .from('fapshi_payments')
+        .from('add_funds_payments')
         .update({
           status: result.data.status,
-          fapshi_transaction_id: result.data.id,
           updated_at: new Date().toISOString(),
         })
         .eq('reference', reference);
 
       // If payment is successful, credit user balance
       if (result.data.status === 'completed') {
-        const creditResult = await creditUserBalance(fastify, userId, result.data.amount / 100, result.data.currency);
+        const creditResult = await creditUserBalance(fastify, userId, result.data.amount, result.data.currency);
         
         if (!creditResult.success) {
           return reply.code(500).send({
@@ -2764,7 +2715,7 @@ export default async function routes(fastify, opts) {
           success: true,
           data: {
             reference: result.data.reference,
-            amount: result.data.amount / 100,
+            amount: result.data.amount,
             currency: result.data.currency,
             status: result.data.status,
             newBalance: creditResult.newBalance,
@@ -2777,7 +2728,7 @@ export default async function routes(fastify, opts) {
         success: true,
         data: {
           reference: result.data.reference,
-          amount: result.data.amount / 100,
+          amount: result.data.amount,
           currency: result.data.currency,
           status: result.data.status,
           message: 'Payment verification completed',
