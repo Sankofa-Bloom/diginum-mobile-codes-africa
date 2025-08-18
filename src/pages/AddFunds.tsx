@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import apiClient from '@/lib/apiClient';
@@ -472,6 +473,7 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
                     <SelectItem value="USD">USD</SelectItem>
                     <SelectItem value="EUR">EUR</SelectItem>
                     <SelectItem value="GBP">GBP</SelectItem>
+                    <SelectItem value="XAF">XAF</SelectItem>
                     <SelectItem value="NGN">NGN</SelectItem>
                     <SelectItem value="KES">KES</SelectItem>
                     <SelectItem value="GHS">GHS</SelectItem>

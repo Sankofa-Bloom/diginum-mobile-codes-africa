@@ -79,7 +79,8 @@ exports.handler = async (event, context) => {
     const vatRates = {
       'EUR': 5.0, 'GBP': 5.0, 'JPY': 3.0, 'CAD': 5.0, 'AUD': 5.0,
       'CHF': 3.0, 'CNY': 3.0, 'INR': 5.0, 'BRL': 5.0, 'MXN': 5.0,
-      'SGD': 3.0, 'HKD': 3.0, 'NGN': 5.0, 'EGP': 5.0, 'KES': 5.0, 'GHS': 5.0
+      'SGD': 3.0, 'HKD': 3.0, 'NGN': 5.0, 'EGP': 5.0, 'KES': 5.0, 'GHS': 5.0,
+      'XAF': 2.0 // Cameroon and Central African countries
     };
 
     for (const [currency, rate] of Object.entries(data.rates)) {

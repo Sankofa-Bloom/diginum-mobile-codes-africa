@@ -36,9 +36,15 @@ export class CurrencyService {
       const response = await fetch('https://ipapi.co/json/');
       const data = await response.json();
       
+      // Set XAF as default for Cameroon
+      let currency = data.currency || 'USD';
+      if (data.country_code === 'CM' || data.country_name === 'Cameroon') {
+        currency = 'XAF';
+      }
+      
       return {
         country: data.country_name || 'United States',
-        currency: data.currency || 'USD',
+        currency: currency,
         ip: data.ip || 'unknown'
       };
     } catch (error) {
@@ -183,7 +189,8 @@ export class CurrencyService {
       'NGN': 5.0,
       'EGP': 5.0,
       'KES': 5.0,
-      'GHS': 5.0
+      'GHS': 5.0,
+      'XAF': 2.0 // Cameroon and Central African countries
     };
 
     return vatRates[currency] || 5.0; // Default to 5% VAT
@@ -299,7 +306,8 @@ export class CurrencyService {
       'NGN': '₦',
       'EGP': 'E£',
       'KES': 'KSh',
-      'GHS': 'GH₵'
+      'GHS': 'GH₵',
+      'XAF': 'FCFA' // Central African CFA franc
     };
 
     return symbols[currency] || currency;

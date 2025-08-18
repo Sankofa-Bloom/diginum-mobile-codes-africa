@@ -51,6 +51,10 @@ This document describes the implementation of a multi-currency system for DigiNu
 
 ## Configuration
 
+### Country-Specific Defaults
+- **Cameroon**: Automatically sets XAF (Central African CFA franc) as default currency
+- **Other Countries**: Uses their local currency or USD as fallback
+
 ### Environment Variables
 ```bash
 # Fixer API (required for live exchange rates)
@@ -62,7 +66,7 @@ TEST_MODE=true
 
 ### Supported Currencies
 - **Major**: USD, EUR, GBP, JPY, CAD, AUD, CHF, CNY
-- **African**: NGN (Nigeria), KES (Kenya), GHS (Ghana), EGP (Egypt)
+- **African**: XAF (Cameroon), NGN (Nigeria), KES (Kenya), GHS (Ghana), EGP (Egypt)
 - **Others**: INR, BRL, MXN, SGD, HKD, SEK, NOK, DKK, PLN, CZK, HUF, RUB, TRY, ZAR, KRW, THB, MYR, IDR, PHP, VND
 
 ## Usage Examples
