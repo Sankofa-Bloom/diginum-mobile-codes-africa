@@ -813,9 +813,13 @@ exports.handler = async (event, context) => {
     // Payment transactions endpoint (requires authentication)
     if (endpoint === 'payment-transactions' && httpMethod === 'POST') {
       try {
+        console.log('=== PAYMENT TRANSACTIONS ENDPOINT START ===');
+        console.log('Request body:', requestBody);
+        
         // Check for authorization header
         const authHeader = headers.authorization || headers.Authorization;
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          console.log('No authorization header found');
           return {
             statusCode: 401,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -824,10 +828,12 @@ exports.handler = async (event, context) => {
         }
 
         const token = authHeader.split(' ')[1];
+        console.log('Token extracted, length:', token.length);
         
         // Verify token with Supabase and get user
         const { data: userData, error: userError } = await supabase.auth.getUser(token);
         if (userError || !userData.user) {
+          console.error('Auth error:', userError);
           return {
             statusCode: 401,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -836,9 +842,13 @@ exports.handler = async (event, context) => {
         }
 
         const userId = userData.user.id;
+        console.log('User authenticated:', userId);
+        
         const { reference, amount, currency, payment_method, status, description } = requestBody;
+        console.log('Extracted fields:', { reference, amount, currency, payment_method, status, description });
 
         if (!reference || !amount || !currency || !payment_method || !status) {
+          console.log('Missing required fields');
           return {
             statusCode: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -846,9 +856,42 @@ exports.handler = async (event, context) => {
           };
         }
 
-        // Create payment transaction record
+        console.log('Attempting to create payment transaction...');
+        
+        // First, ensure the simple_payments table exists
+        try {
+          const { error: createTableError } = await supabase.rpc('exec_sql', {
+            sql: `
+              CREATE TABLE IF NOT EXISTS simple_payments (
+                id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+                user_id UUID NOT NULL,
+                reference VARCHAR(255) UNIQUE NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
+                currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+                payment_method VARCHAR(50) NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                description TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+              );
+              
+              -- Create indexes
+              CREATE INDEX IF NOT EXISTS idx_simple_payments_user_id ON simple_payments(user_id);
+              CREATE INDEX IF NOT EXISTS idx_simple_payments_reference ON simple_payments(reference);
+              CREATE INDEX IF NOT EXISTS idx_simple_payments_status ON simple_payments(status);
+            `
+          });
+          
+          if (createTableError) {
+            console.log('Table creation error (might already exist):', createTableError);
+          }
+        } catch (tableError) {
+          console.log('Table creation failed (might already exist):', tableError);
+        }
+        
+        // Create payment transaction record in simple_payments table
         const { data: transaction, error: insertError } = await supabase
-          .from('payment_transactions')
+          .from('simple_payments')
           .insert([{
             user_id: userId,
             reference: reference,
@@ -870,6 +913,8 @@ exports.handler = async (event, context) => {
           };
         }
 
+        console.log('Payment transaction created successfully:', transaction);
+
         return {
           statusCode: 201,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -881,6 +926,7 @@ exports.handler = async (event, context) => {
         };
       } catch (error) {
         console.error('Error creating payment transaction:', error);
+        console.error('Error stack:', error.stack);
         return {
           statusCode: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1050,7 +1096,7 @@ exports.handler = async (event, context) => {
 
         // Update payment transaction status
         const { data: transaction, error: updateError } = await supabase
-          .from('payment_transactions')
+          .from('simple_payments')
           .update({ 
             status: status,
             updated_at: new Date().toISOString()
@@ -1126,7 +1172,7 @@ exports.handler = async (event, context) => {
 
         // Get payment transaction details
         const { data: transaction, error: fetchError } = await supabase
-          .from('payment_transactions')
+          .from('simple_payments')
           .select('*')
           .eq('reference', reference)
           .eq('user_id', userId)
