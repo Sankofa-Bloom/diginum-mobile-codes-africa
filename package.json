@@ -15,7 +15,7 @@
 
     "netlify-build": "npm run build",
     "start": "node .output/index.js",
-    "postinstall": "cd backend && npm install && cd ../netlify/functions && npm install",
+    "postinstall": "cd backend && npm install",
     "version:patch": "npm version patch",
     "version:minor": "npm version minor",
     "version:major": "npm version major",
