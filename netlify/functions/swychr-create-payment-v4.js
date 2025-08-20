@@ -6,8 +6,11 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
 };
 
+// Helper to ensure URL doesn't have trailing slash
+const cleanUrl = (url) => url.replace(/\/$/, '');
+
 exports.handler = async (event, context) => {
-  const FUNCTION_VERSION = 'v4.3';
+  const FUNCTION_VERSION = 'v4.4';
 
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
@@ -110,7 +113,7 @@ exports.handler = async (event, context) => {
     // Get Swychr credentials
     const swychrEmail = process.env.SWYCHR_EMAIL;
     const swychrPassword = process.env.SWYCHR_PASSWORD;
-    const swychrBaseURL = process.env.SWYCHR_BASE_URL || 'https://api.accountpe.com/api/payin';
+    const swychrBaseURL = cleanUrl(process.env.SWYCHR_BASE_URL || 'https://api.accountpe.com/api/payin');
 
     if (!swychrEmail || !swychrPassword) {
       console.error('Swychr credentials not configured');
@@ -127,18 +130,167 @@ exports.handler = async (event, context) => {
 
     // Step 1: Authentication
     console.log('Attempting Swychr authentication...');
+    console.log('Auth URL:', `${swychrBaseURL}/admin/auth`);
+    
     let authResponse;
     try {
       authResponse = await fetch(`${swychrBaseURL}/admin/auth`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify({
           email: swychrEmail,
           password: swychrPassword
         })
       });
+
+      console.log('Auth response status:', authResponse.status);
+      console.log('Auth response headers:', Object.fromEntries(authResponse.headers.entries()));
+      
+      const authResponseText = await authResponse.text();
+      console.log('Raw auth response:', authResponseText);
+      
+      try {
+        const authData = JSON.parse(authResponseText);
+        console.log('Parsed auth response:', {
+          status: authData.status,
+          message: authData.message
+        });
+
+        if (!authResponse.ok || authData.status !== 0) {
+          return {
+            statusCode: authResponse.ok ? 400 : authResponse.status,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              status: 1,
+              message: authData.message || 'Authentication failed',
+              data: null
+            })
+          };
+        }
+
+        const authToken = authData.data?.token || authData.token;
+        if (!authToken) {
+          console.error('No auth token in response');
+          return {
+            statusCode: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              status: 1,
+              message: 'Invalid authentication response',
+              data: null
+            })
+          };
+        }
+
+        // Step 2: Create Payment Link
+        console.log('Creating payment link...');
+        console.log('Payment URL:', `${swychrBaseURL}/create_payment_links`);
+        
+        const paymentPayload = {
+          country_code,
+          name,
+          email,
+          mobile: mobile || '',
+          amount: Math.round(amount),
+          transaction_id,
+          description: description || `Payment for ${name}`,
+          pass_digital_charge
+        };
+        
+        console.log('Payment payload:', {
+          ...paymentPayload,
+          email: '***',
+          mobile: '***'
+        });
+        
+        const paymentResponse = await fetch(`${swychrBaseURL}/create_payment_links`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify(paymentPayload)
+        });
+
+        console.log('Payment response status:', paymentResponse.status);
+        console.log('Payment response headers:', Object.fromEntries(paymentResponse.headers.entries()));
+        
+        const paymentResponseText = await paymentResponse.text();
+        console.log('Raw payment response:', paymentResponseText);
+        
+        try {
+          const paymentData = JSON.parse(paymentResponseText);
+          console.log('Parsed payment response:', {
+            status: paymentData.status,
+            message: paymentData.message
+          });
+
+          // Handle 404 for country not found as per API spec
+          if (paymentResponse.status === 404) {
+            return {
+              statusCode: 404,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                status: 1,
+                message: 'Country not found',
+                data: null
+              })
+            };
+          }
+
+          if (!paymentResponse.ok || paymentData.status !== 0) {
+            return {
+              statusCode: paymentResponse.ok ? 400 : paymentResponse.status,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                status: 1,
+                message: paymentData.message || 'Failed to create payment link',
+                data: null
+              })
+            };
+          }
+
+          // Success response as per API spec
+          return {
+            statusCode: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              status: 0,
+              message: 'Payment link created successfully',
+              data: paymentData.data || {}
+            })
+          };
+          
+        } catch (e) {
+          console.error('Failed to parse payment response:', e);
+          return {
+            statusCode: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              status: 1,
+              message: 'Invalid payment gateway response',
+              data: null
+            })
+          };
+        }
+        
+      } catch (e) {
+        console.error('Failed to parse auth response:', e);
+        return {
+          statusCode: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 1,
+            message: 'Invalid authentication response format',
+            data: null
+          })
+        };
+      }
+      
     } catch (e) {
       console.error('Network error during authentication:', e);
       return {
@@ -151,132 +303,6 @@ exports.handler = async (event, context) => {
         })
       };
     }
-
-    if (!authResponse.ok) {
-      console.error('Auth failed:', authResponse.status);
-      return {
-        statusCode: authResponse.status,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 1,
-          message: 'Authentication failed',
-          data: null
-        })
-      };
-    }
-
-    const authData = await authResponse.json();
-    console.log('Auth response:', { status: authData.status, message: authData.message });
-
-    if (authData.status !== 0) {
-      return {
-        statusCode: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 1,
-          message: authData.message || 'Authentication failed',
-          data: null
-        })
-      };
-    }
-
-    const authToken = authData.data?.token || authData.token;
-    if (!authToken) {
-      console.error('No auth token in response');
-      return {
-        statusCode: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 1,
-          message: 'Invalid authentication response',
-          data: null
-        })
-      };
-    }
-
-    // Step 2: Create Payment Link
-    console.log('Creating payment link...');
-    const paymentPayload = {
-      country_code,
-      name,
-      email,
-      mobile: mobile || '',
-      amount: Math.round(amount),
-      transaction_id,
-      description: description || `Payment for ${name}`,
-      pass_digital_charge
-    };
-    
-    console.log('Payment payload:', {
-      ...paymentPayload,
-      email: '***',
-      mobile: '***'
-    });
-    
-    let paymentResponse;
-    try {
-      paymentResponse = await fetch(`${swychrBaseURL}/create_payment_links`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
-        },
-        body: JSON.stringify(paymentPayload)
-      });
-    } catch (e) {
-      console.error('Network error creating payment:', e);
-      return {
-        statusCode: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 1,
-          message: 'Failed to connect to payment gateway',
-          data: null
-        })
-      };
-    }
-
-    const paymentData = await paymentResponse.json();
-    console.log('Payment response:', {
-      status: paymentData.status,
-      message: paymentData.message
-    });
-
-    // Handle 404 for country not found as per API spec
-    if (paymentResponse.status === 404) {
-      return {
-        statusCode: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 1,
-          message: 'Country not found',
-          data: null
-        })
-      };
-    }
-
-    if (!paymentResponse.ok || paymentData.status !== 0) {
-      return {
-        statusCode: paymentResponse.ok ? 400 : paymentResponse.status,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 1,
-          message: paymentData.message || 'Failed to create payment link',
-          data: null
-        })
-      };
-    }
-
-    // Success response as per API spec
-    return {
-      statusCode: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        status: 0,
-        message: 'Payment link created successfully',
-        data: paymentData.data || {}
-      })
-    };
 
   } catch (error) {
     console.error('Unexpected error:', error);
