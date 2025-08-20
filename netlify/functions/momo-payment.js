@@ -1,5 +1,6 @@
 const fetch = require('node-fetch');
 const { v4: uuidv4 } = require('uuid');
+const { getAccessToken } = require('./momo-auth');
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,80 +8,18 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
 };
 
-// MTN MoMo API Base URLs
-const SANDBOX_URL = 'https://sandbox.momodeveloper.mtn.com';
-const PRODUCTION_URL = 'https://momodeveloper.mtn.com';
-
-// Helper to get API URL based on environment
-const getApiUrl = () => {
-  return process.env.MTN_MOMO_ENVIRONMENT === 'production' ? PRODUCTION_URL : SANDBOX_URL;
-};
-
-// Helper to generate UUID for X-Reference-Id
-const generateTransactionId = () => uuidv4();
-
-// Helper to get API user and token
-async function getApiUserAndToken() {
-  const apiUrl = getApiUrl();
-  const subscriptionKey = process.env.MTN_MOMO_SUBSCRIPTION_KEY;
-  const userId = process.env.MTN_MOMO_USER_ID;
-  const apiKey = process.env.MTN_MOMO_API_KEY;
-
-  if (!subscriptionKey || !userId || !apiKey) {
-    throw new Error('MTN MoMo API credentials not configured');
-  }
-
-  // Get API token
-  const tokenResponse = await fetch(`${apiUrl}/collection/token/`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${Buffer.from(`${userId}:${apiKey}`).toString('base64')}`,
-      'Ocp-Apim-Subscription-Key': subscriptionKey
-    }
-  });
-
-  if (!tokenResponse.ok) {
-    throw new Error('Failed to get API token');
-  }
-
-  const { access_token } = await tokenResponse.json();
-  return { userId, token: access_token };
-}
-
-// Helper to initiate payment request
-async function initiatePayment(token, paymentData) {
-  const apiUrl = getApiUrl();
-  const subscriptionKey = process.env.MTN_MOMO_SUBSCRIPTION_KEY;
-  const referenceId = generateTransactionId();
-
-  const response = await fetch(`${apiUrl}/collection/v1_0/requesttopay`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'X-Reference-Id': referenceId,
-      'X-Target-Environment': process.env.MTN_MOMO_ENVIRONMENT,
-      'Ocp-Apim-Subscription-Key': subscriptionKey,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      amount: paymentData.amount,
-      currency: paymentData.currency || 'EUR',
-      externalId: paymentData.transaction_id,
-      payer: {
-        partyIdType: 'MSISDN',
-        partyId: paymentData.phone_number
-      },
-      payerMessage: paymentData.description || 'Payment for DigiNum',
-      payeeNote: 'Payment for DigiNum services'
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Payment request failed: ${response.status} - ${errorText}`);
-  }
-
-  return referenceId;
+// Helper to format phone number
+function formatPhoneNumber(phoneNumber) {
+  // Remove any non-digit characters
+  const cleaned = phoneNumber.replace(/\D/g, '');
+  
+  // If number starts with +, remove it
+  const withoutPlus = cleaned.startsWith('+') ? cleaned.slice(1) : cleaned;
+  
+  // If number starts with 00, remove it
+  const withoutPrefix = withoutPlus.startsWith('00') ? withoutPlus.slice(2) : withoutPlus;
+  
+  return withoutPrefix;
 }
 
 exports.handler = async (event, context) => {
@@ -130,7 +69,7 @@ exports.handler = async (event, context) => {
     }
 
     // Validate required fields
-    const { amount, phone_number, transaction_id } = requestBody;
+    const { amount, phone_number, transaction_id, currency = 'EUR' } = requestBody;
     if (!amount || !phone_number || !transaction_id) {
       return {
         statusCode: 400,
@@ -150,11 +89,56 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Get API credentials and token
-    const { token } = await getApiUserAndToken();
+    // Get access token
+    const { access_token } = await getAccessToken();
 
-    // Initiate payment
-    const referenceId = await initiatePayment(token, requestBody);
+    // Generate reference ID for this payment
+    const referenceId = uuidv4();
+
+    // Prepare payment request
+    const baseUrl = process.env.MTN_MOMO_ENVIRONMENT === 'production'
+      ? 'https://momodeveloper.mtn.com'
+      : 'https://sandbox.momodeveloper.mtn.com';
+
+    const paymentResponse = await fetch(`${baseUrl}/collection/v1_0/requesttopay`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${access_token}`,
+        'X-Reference-Id': referenceId,
+        'X-Target-Environment': process.env.MTN_MOMO_ENVIRONMENT,
+        'Content-Type': 'application/json',
+        'Ocp-Apim-Subscription-Key': process.env.MTN_MOMO_SUBSCRIPTION_KEY
+      },
+      body: JSON.stringify({
+        amount: amount.toString(),
+        currency,
+        externalId: transaction_id,
+        payer: {
+          partyIdType: 'MSISDN',
+          partyId: formatPhoneNumber(phone_number)
+        },
+        payerMessage: requestBody.description || 'Payment for DigiNum services',
+        payeeNote: 'Payment for DigiNum services'
+      })
+    });
+
+    if (!paymentResponse.ok) {
+      const errorText = await paymentResponse.text();
+      console.error('Payment request failed:', {
+        status: paymentResponse.status,
+        error: errorText
+      });
+
+      return {
+        statusCode: paymentResponse.status,
+        headers: corsHeaders,
+        body: JSON.stringify({
+          status: 1,
+          message: 'Failed to initiate payment',
+          data: null
+        })
+      };
+    }
 
     // Return success response
     return {
@@ -178,7 +162,7 @@ exports.handler = async (event, context) => {
       headers: corsHeaders,
       body: JSON.stringify({
         status: 1,
-        message: error.message || 'Payment request failed',
+        message: error.message || 'Failed to process payment',
         data: null
       })
     };

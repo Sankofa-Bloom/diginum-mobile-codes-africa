@@ -1,36 +1,11 @@
 const fetch = require('node-fetch');
+const { getAccessToken } = require('./momo-auth');
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
 };
-
-// Helper to get API token
-async function getApiToken() {
-  const apiUrl = process.env.MTN_MOMO_ENVIRONMENT === 'production' 
-    ? 'https://momodeveloper.mtn.com'
-    : 'https://sandbox.momodeveloper.mtn.com';
-
-  const subscriptionKey = process.env.MTN_MOMO_SUBSCRIPTION_KEY;
-  const userId = process.env.MTN_MOMO_USER_ID;
-  const apiKey = process.env.MTN_MOMO_API_KEY;
-
-  const response = await fetch(`${apiUrl}/collection/token/`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${Buffer.from(`${userId}:${apiKey}`).toString('base64')}`,
-      'Ocp-Apim-Subscription-Key': subscriptionKey
-    }
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to get API token');
-  }
-
-  const { access_token } = await response.json();
-  return access_token;
-}
 
 exports.handler = async (event, context) => {
   // Handle CORS preflight
@@ -72,29 +47,52 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Get API token
-    const token = await getApiToken();
+    // Get access token
+    const { access_token } = await getAccessToken();
 
     // Check payment status
-    const apiUrl = process.env.MTN_MOMO_ENVIRONMENT === 'production' 
+    const baseUrl = process.env.MTN_MOMO_ENVIRONMENT === 'production'
       ? 'https://momodeveloper.mtn.com'
       : 'https://sandbox.momodeveloper.mtn.com';
 
-    const statusResponse = await fetch(`${apiUrl}/collection/v1_0/requesttopay/${referenceId}`, {
+    const statusResponse = await fetch(`${baseUrl}/collection/v1_0/requesttopay/${referenceId}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${access_token}`,
         'X-Target-Environment': process.env.MTN_MOMO_ENVIRONMENT,
         'Ocp-Apim-Subscription-Key': process.env.MTN_MOMO_SUBSCRIPTION_KEY
       }
     });
 
     if (!statusResponse.ok) {
-      throw new Error('Failed to check payment status');
+      const errorText = await statusResponse.text();
+      console.error('Status check failed:', {
+        status: statusResponse.status,
+        error: errorText
+      });
+
+      return {
+        statusCode: statusResponse.status,
+        headers: corsHeaders,
+        body: JSON.stringify({
+          status: 1,
+          message: 'Failed to check payment status',
+          data: null
+        })
+      };
     }
 
-    const paymentStatus = await statusResponse.json();
-    console.log('Payment status:', paymentStatus);
+    const statusData = await statusResponse.json();
+    console.log('Payment status:', statusData);
+
+    // Map MTN MoMo status to our status format
+    const statusMap = {
+      'SUCCESSFUL': 'SUCCESSFUL',
+      'FAILED': 'FAILED',
+      'PENDING': 'PENDING',
+      'TIMEOUT': 'FAILED',
+      'REJECTED': 'FAILED'
+    };
 
     return {
       statusCode: 200,
@@ -104,8 +102,14 @@ exports.handler = async (event, context) => {
         message: 'Payment status retrieved successfully',
         data: {
           reference_id: referenceId,
-          status: paymentStatus.status,
-          ...paymentStatus
+          status: statusMap[statusData.status] || statusData.status,
+          amount: statusData.amount,
+          currency: statusData.currency,
+          payer: statusData.payer,
+          payerMessage: statusData.payerMessage,
+          payeeNote: statusData.payeeNote,
+          externalId: statusData.externalId,
+          reason: statusData.reason
         }
       })
     };
