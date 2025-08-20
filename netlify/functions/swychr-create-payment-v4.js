@@ -10,7 +10,7 @@ const corsHeaders = {
 const cleanUrl = (url) => url.replace(/\/$/, '');
 
 exports.handler = async (event, context) => {
-  const FUNCTION_VERSION = 'v4.4';
+  const FUNCTION_VERSION = 'v4.5';
 
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
@@ -155,31 +155,18 @@ exports.handler = async (event, context) => {
       try {
         const authData = JSON.parse(authResponseText);
         console.log('Parsed auth response:', {
-          status: authData.status,
+          token: authData.token ? 'present' : 'missing',
           message: authData.message
         });
 
-        if (!authResponse.ok || authData.status !== 0) {
+        // Check for auth token instead of status
+        if (!authResponse.ok || !authData.token) {
           return {
             statusCode: authResponse.ok ? 400 : authResponse.status,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             body: JSON.stringify({
               status: 1,
               message: authData.message || 'Authentication failed',
-              data: null
-            })
-          };
-        }
-
-        const authToken = authData.data?.token || authData.token;
-        if (!authToken) {
-          console.error('No auth token in response');
-          return {
-            statusCode: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              status: 1,
-              message: 'Invalid authentication response',
               data: null
             })
           };
@@ -211,7 +198,7 @@ exports.handler = async (event, context) => {
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'Authorization': `Bearer ${authToken}`
+            'Authorization': `Bearer ${authData.token}`
           },
           body: JSON.stringify(paymentPayload)
         });
@@ -226,7 +213,8 @@ exports.handler = async (event, context) => {
           const paymentData = JSON.parse(paymentResponseText);
           console.log('Parsed payment response:', {
             status: paymentData.status,
-            message: paymentData.message
+            message: paymentData.message,
+            data: paymentData.data ? 'present' : 'missing'
           });
 
           // Handle 404 for country not found as per API spec
@@ -242,7 +230,7 @@ exports.handler = async (event, context) => {
             };
           }
 
-          if (!paymentResponse.ok || paymentData.status !== 0) {
+          if (!paymentResponse.ok || !paymentData.data) {
             return {
               statusCode: paymentResponse.ok ? 400 : paymentResponse.status,
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -254,14 +242,14 @@ exports.handler = async (event, context) => {
             };
           }
 
-          // Success response as per API spec
+          // Success response
           return {
             statusCode: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             body: JSON.stringify({
               status: 0,
               message: 'Payment link created successfully',
-              data: paymentData.data || {}
+              data: paymentData.data
             })
           };
           
