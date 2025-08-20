@@ -94,11 +94,6 @@
   status = 200
 
 [[redirects]]
-  from = "/momo-callback"
-  to = "/.netlify/functions/momo-callback"
-  status = 200
-
-[[redirects]]
   from = "/momo-status"
   to = "/.netlify/functions/momo-status"
   status = 200
