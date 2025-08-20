@@ -12,6 +12,7 @@ import apiClient from '@/lib/apiClient';
 import { supabase } from '@/lib/supabaseClient';
 import LanguageToggle from '@/components/LanguageToggle';
 import DualCurrencyDisplay from '@/components/DualCurrencyDisplay';
+import { formatPhoneNumber, isValidMTNNumber, formatPhoneNumberForDisplay } from '@/lib/phoneUtils';
 
 interface AddFundsProps {
   onFundsAdded?: (newBalance: number) => void;
@@ -101,10 +102,10 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
       return;
     }
 
-    if (!phoneNumber) {
+    if (!phoneNumber || !isValidMTNNumber(phoneNumber)) {
       toast({
-        title: "Phone Number Required",
-        description: "Please enter your MTN Mobile Money phone number.",
+        title: "Invalid Phone Number",
+        description: "Please enter a valid MTN Mobile Money number (e.g., 67XXXXXXX).",
         variant: "destructive",
       });
       return;
@@ -154,7 +155,7 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
         body: JSON.stringify({
           amount: numAmount,
           currency: selectedCurrency,
-          phone_number: phoneNumber,
+          phone_number: formatPhoneNumber(phoneNumber),
           transaction_id: reference,
           description: isOrderPayment 
             ? `Payment for ${orderData.serviceTitle}`
@@ -428,13 +429,16 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
               <Input
                 id="phone"
                 type="tel"
-                placeholder="Enter your MTN number"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="Enter MTN number (e.g., 677123456)"
+                value={formatPhoneNumberForDisplay(phoneNumber)}
+                onChange={(e) => {
+                  // Store raw number internally
+                  setPhoneNumber(e.target.value.replace(/[^\d+]/g, ''));
+                }}
                 className="flex-1"
               />
               <p className="text-xs text-muted-foreground">
-                Enter your MTN Mobile Money number in international format (e.g., +237...)
+                Enter your MTN number without country code - we'll add +237 automatically
               </p>
             </div>
             
