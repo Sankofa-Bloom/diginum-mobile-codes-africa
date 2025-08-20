@@ -7,7 +7,8 @@ const corsHeaders = {
 };
 
 exports.handler = async (event, context) => {
-  const FUNCTION_VERSION = 'v4.2';
+  const FUNCTION_VERSION = 'v4.3';
+
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return {
@@ -23,15 +24,14 @@ exports.handler = async (event, context) => {
       statusCode: 200,
       headers: { ...corsHeaders, 'X-Function-Version': FUNCTION_VERSION },
       body: JSON.stringify({ 
-        functionVersion: FUNCTION_VERSION, 
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'unknown',
-        test_mode: process.env.TEST_MODE || 'false',
-        swychr_email: process.env.SWYCHR_EMAIL ? 'SET' : 'NOT_SET',
-        swychr_password: process.env.SWYCHR_PASSWORD ? 'SET' : 'NOT_SET',
-        swychr_base_url: process.env.SWYCHR_BASE_URL || 'default'
-      }),
+        status: 0,
+        message: 'Service is healthy',
+        data: {
+          version: FUNCTION_VERSION,
+          timestamp: new Date().toISOString(),
+          environment: process.env.NODE_ENV || 'unknown'
+        }
+      })
     };
   }
   
@@ -40,27 +40,23 @@ exports.handler = async (event, context) => {
     return {
       statusCode: 405,
       headers: { ...corsHeaders, 'X-Function-Version': FUNCTION_VERSION },
-      body: JSON.stringify({ functionVersion: FUNCTION_VERSION, error: 'Method not allowed' }),
+      body: JSON.stringify({
+        status: 1,
+        message: 'Method not allowed',
+        data: null
+      })
     };
   }
 
   try {
     console.log('=== SWYCHR CREATE PAYMENT FUNCTION START ===');
     console.log('Function version:', FUNCTION_VERSION);
-    console.log('Environment variables:', {
-      NODE_ENV: process.env.NODE_ENV,
-      TEST_MODE: process.env.TEST_MODE,
-      SWYCHR_EMAIL: process.env.SWYCHR_EMAIL ? 'SET' : 'NOT_SET',
-      SWYCHR_PASSWORD: process.env.SWYCHR_PASSWORD ? 'SET' : 'NOT_SET',
-      SWYCHR_BASE_URL: process.env.SWYCHR_BASE_URL || 'default'
-    });
     
     let requestBody;
     try {
       requestBody = JSON.parse(event.body);
       console.log('Parsed request data:', {
         ...requestBody,
-        // Mask sensitive data
         email: requestBody.email ? '***' : undefined,
         mobile: requestBody.mobile ? '***' : undefined
       });
@@ -68,11 +64,11 @@ exports.handler = async (event, context) => {
       console.error('Failed to parse request body:', e);
       return {
         statusCode: 400,
-        headers: { ...corsHeaders, 'X-Function-Version': FUNCTION_VERSION },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          functionVersion: FUNCTION_VERSION,
-          error: 'Invalid request body',
-          message: 'Failed to parse JSON body'
+          status: 1,
+          message: 'Invalid request body format',
+          data: null
         })
       };
     }
@@ -83,151 +79,123 @@ exports.handler = async (event, context) => {
       email,
       mobile,
       amount,
-      currency = 'USD',
       transaction_id,
       description,
       pass_digital_charge
     } = requestBody;
 
-    // Validate required fields
+    // Validate required fields as per API spec
     if (!country_code || !name || !email || !amount || !transaction_id || pass_digital_charge === undefined) {
       return {
         statusCode: 400,
-        headers: { ...corsHeaders, 'X-Function-Version': FUNCTION_VERSION },
-        body: JSON.stringify({ 
-          functionVersion: FUNCTION_VERSION, 
-          error: 'Missing required fields',
-          required: ['country_code', 'name', 'email', 'amount', 'transaction_id', 'pass_digital_charge'],
-          received: {
-            country_code: !!country_code,
-            name: !!name,
-            email: !!email,
-            amount: !!amount,
-            transaction_id: !!transaction_id,
-            pass_digital_charge: pass_digital_charge !== undefined
-          }
-        }),
-      };
-    }
-
-    // Get Swychr credentials from environment variables
-    const swychrEmail = process.env.SWYCHR_EMAIL;
-    const swychrPassword = process.env.SWYCHR_PASSWORD;
-    const swychrBaseURL = process.env.SWYCHR_BASE_URL || 'https://api.accountpe.com/api/payin';
-
-    // Check if credentials are configured
-    if (!swychrEmail || !swychrPassword) {
-      console.error('Swychr credentials not configured');
-      return {
-        statusCode: 500,
-        headers: { ...corsHeaders, 'X-Function-Version': FUNCTION_VERSION },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          functionVersion: FUNCTION_VERSION,
-          error: 'Payment gateway configuration error',
-          message: 'Payment gateway credentials not configured'
+          status: 1,
+          message: 'Missing required fields',
+          data: {
+            required: ['country_code', 'name', 'email', 'amount', 'transaction_id', 'pass_digital_charge'],
+            received: {
+              country_code: !!country_code,
+              name: !!name,
+              email: !!email,
+              amount: !!amount,
+              transaction_id: !!transaction_id,
+              pass_digital_charge: pass_digital_charge !== undefined
+            }
+          }
         })
       };
     }
 
-    // Attempt authentication
+    // Get Swychr credentials
+    const swychrEmail = process.env.SWYCHR_EMAIL;
+    const swychrPassword = process.env.SWYCHR_PASSWORD;
+    const swychrBaseURL = process.env.SWYCHR_BASE_URL || 'https://api.accountpe.com/api/payin';
+
+    if (!swychrEmail || !swychrPassword) {
+      console.error('Swychr credentials not configured');
+      return {
+        statusCode: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 1,
+          message: 'Payment gateway configuration error',
+          data: null
+        })
+      };
+    }
+
+    // Step 1: Authentication
     console.log('Attempting Swychr authentication...');
     let authResponse;
     try {
       authResponse = await fetch(`${swychrBaseURL}/admin/auth`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           email: swychrEmail,
-          password: swychrPassword,
-        }),
+          password: swychrPassword
+        })
       });
     } catch (e) {
       console.error('Network error during authentication:', e);
       return {
         statusCode: 500,
-        headers: { ...corsHeaders, 'X-Function-Version': FUNCTION_VERSION },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          functionVersion: FUNCTION_VERSION,
-          error: 'Payment gateway connection error',
-          message: 'Failed to connect to payment gateway'
+          status: 1,
+          message: 'Failed to connect to payment gateway',
+          data: null
         })
       };
     }
 
-    console.log('Auth response status:', authResponse.status);
-    
-    let authResponseText;
-    try {
-      authResponseText = await authResponse.text();
-      console.log('Raw auth response:', authResponseText);
-    } catch (e) {
-      console.error('Failed to read auth response:', e);
+    if (!authResponse.ok) {
+      console.error('Auth failed:', authResponse.status);
       return {
-        statusCode: 500,
-        headers: { ...corsHeaders, 'X-Function-Version': FUNCTION_VERSION },
+        statusCode: authResponse.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          functionVersion: FUNCTION_VERSION,
-          error: 'Payment gateway response error',
-          message: 'Invalid response from payment gateway'
+          status: 1,
+          message: 'Authentication failed',
+          data: null
         })
       };
     }
 
-    let authData;
-    try {
-      authData = JSON.parse(authResponseText);
-      console.log('Parsed auth response:', JSON.stringify(authData, null, 2));
-    } catch (e) {
-      console.error('Failed to parse auth response:', e);
-      return {
-        statusCode: 500,
-        headers: { ...corsHeaders, 'X-Function-Version': FUNCTION_VERSION },
-        body: JSON.stringify({
-          functionVersion: FUNCTION_VERSION,
-          error: 'Payment gateway response error',
-          message: 'Invalid JSON response from payment gateway',
-          details: authResponseText
-        })
-      };
-    }
+    const authData = await authResponse.json();
+    console.log('Auth response:', { status: authData.status, message: authData.message });
 
-    if (!authResponse.ok || authData.status !== 0) {
-      console.error('Auth failed:', authData);
+    if (authData.status !== 0) {
       return {
-        statusCode: 500,
-        headers: { ...corsHeaders, 'X-Function-Version': FUNCTION_VERSION },
+        statusCode: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          functionVersion: FUNCTION_VERSION,
-          error: 'Payment gateway authentication failed',
+          status: 1,
           message: authData.message || 'Authentication failed',
-          details: {
-            status: authResponse.status,
-            gateway_status: authData.status,
-            gateway_message: authData.message
-          }
+          data: null
         })
       };
     }
 
     const authToken = authData.data?.token || authData.token;
     if (!authToken) {
-      console.error('No auth token in response:', authData);
+      console.error('No auth token in response');
       return {
         statusCode: 500,
-        headers: { ...corsHeaders, 'X-Function-Version': FUNCTION_VERSION },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          functionVersion: FUNCTION_VERSION,
-          error: 'Payment gateway authentication error',
-          message: 'Authentication token not found in response'
+          status: 1,
+          message: 'Invalid authentication response',
+          data: null
         })
       };
     }
 
-    console.log('Authentication successful, creating payment link...');
-    
-    // Prepare payment data
+    // Step 2: Create Payment Link
+    console.log('Creating payment link...');
     const paymentPayload = {
       country_code,
       name,
@@ -251,113 +219,75 @@ exports.handler = async (event, context) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
+          'Authorization': `Bearer ${authToken}`
         },
-        body: JSON.stringify(paymentPayload),
+        body: JSON.stringify(paymentPayload)
       });
     } catch (e) {
       console.error('Network error creating payment:', e);
       return {
         statusCode: 500,
-        headers: { ...corsHeaders, 'X-Function-Version': FUNCTION_VERSION },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          functionVersion: FUNCTION_VERSION,
-          error: 'Payment gateway connection error',
-          message: 'Failed to connect to payment gateway while creating payment'
+          status: 1,
+          message: 'Failed to connect to payment gateway',
+          data: null
         })
       };
     }
 
-    console.log('Payment response status:', paymentResponse.status);
-    
-    let paymentResponseText;
-    try {
-      paymentResponseText = await paymentResponse.text();
-      console.log('Raw payment response:', paymentResponseText);
-    } catch (e) {
-      console.error('Failed to read payment response:', e);
-      return {
-        statusCode: 500,
-        headers: { ...corsHeaders, 'X-Function-Version': FUNCTION_VERSION },
-        body: JSON.stringify({
-          functionVersion: FUNCTION_VERSION,
-          error: 'Payment gateway response error',
-          message: 'Invalid response while creating payment'
-        })
-      };
-    }
+    const paymentData = await paymentResponse.json();
+    console.log('Payment response:', {
+      status: paymentData.status,
+      message: paymentData.message
+    });
 
-    let paymentData;
-    try {
-      paymentData = JSON.parse(paymentResponseText);
-      console.log('Parsed payment response:', JSON.stringify(paymentData, null, 2));
-    } catch (e) {
-      console.error('Failed to parse payment response:', e);
+    // Handle 404 for country not found as per API spec
+    if (paymentResponse.status === 404) {
       return {
-        statusCode: 500,
-        headers: { ...corsHeaders, 'X-Function-Version': FUNCTION_VERSION },
+        statusCode: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          functionVersion: FUNCTION_VERSION,
-          error: 'Payment gateway response error',
-          message: 'Invalid JSON response while creating payment',
-          details: paymentResponseText
+          status: 1,
+          message: 'Country not found',
+          data: null
         })
       };
     }
 
     if (!paymentResponse.ok || paymentData.status !== 0) {
-      console.error('Payment creation failed:', paymentData);
       return {
-        statusCode: 500,
-        headers: { ...corsHeaders, 'X-Function-Version': FUNCTION_VERSION },
+        statusCode: paymentResponse.ok ? 400 : paymentResponse.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          functionVersion: FUNCTION_VERSION,
-          error: 'Failed to create payment',
-          message: paymentData.message || 'Payment creation failed',
-          details: {
-            status: paymentResponse.status,
-            gateway_status: paymentData.status,
-            gateway_message: paymentData.message
-          }
+          status: 1,
+          message: paymentData.message || 'Failed to create payment link',
+          data: null
         })
       };
     }
 
-    console.log('Payment link created successfully');
-
+    // Success response as per API spec
     return {
       statusCode: 200,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json',
-      },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        functionVersion: FUNCTION_VERSION,
-        success: true,
-        data: paymentData.data || {},
-        message: 'Payment link created successfully'
-      }),
+        status: 0,
+        message: 'Payment link created successfully',
+        data: paymentData.data || {}
+      })
     };
 
   } catch (error) {
     console.error('Unexpected error:', error);
-    console.error('Error stack:', error.stack);
-    
     return {
       statusCode: 500,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json'
-      },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        functionVersion: FUNCTION_VERSION,
-        error: 'Internal server error',
+        status: 1,
         message: 'An unexpected error occurred',
-        details: process.env.NODE_ENV === 'development' ? {
-          error: error.message,
-          stack: error.stack
-        } : undefined
-      }),
+        data: null
+      })
     };
   }
 };
