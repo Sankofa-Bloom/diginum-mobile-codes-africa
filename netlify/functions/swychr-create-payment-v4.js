@@ -1,11 +1,5 @@
 const fetch = require('node-fetch');
 
-// NOTE: This function is currently running in FORCED TEST MODE
-// because the TEST_MODE environment variable is not being properly
-// passed to the function runtime. All real API calls are commented out.
-// The function will always return mock responses until this is resolved.
-
-// Helper function to send CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
@@ -13,7 +7,7 @@ const corsHeaders = {
 };
 
 exports.handler = async (event, context) => {
-  const FUNCTION_VERSION = 'v4';
+  const FUNCTION_VERSION = 'v4.1';
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return {
@@ -152,13 +146,7 @@ exports.handler = async (event, context) => {
     // Check if credentials are configured
     if (!swychrEmail || !swychrPassword) {
       console.error('Swychr credentials not configured');
-      console.log('Swychr credentials check:', {
-        email: swychrEmail ? 'SET' : 'NOT_SET',
-        password: swychrPassword ? 'SET' : 'NOT_SET'
-      });
-      
-      // Even with credentials missing, we should still be in test mode
-      console.log('Credentials missing but TEST_MODE should handle this');
+      throw new Error('Swychr credentials not configured');
     }
 
     // If we reach here, credentials are configured, proceed with real Swychr integration
@@ -169,40 +157,17 @@ exports.handler = async (event, context) => {
       password: swychrPassword ? '***' : 'NOT_SET'
     });
     
-    // Force test mode for now since TEST_MODE env var isn't working properly
-    console.log('Forcing test mode due to environment variable issues');
-    return {
-      statusCode: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ functionVersion: FUNCTION_VERSION,
-        success: true,
-        data: {
-          payment_url: 'https://example.com/test-payment',
-          transaction_id,
-          status: 'pending'
-        },
-        message: 'Test payment link created successfully (forced test mode)',
-        test_mode: true,
-        reason: 'Environment variable TEST_MODE not properly set in function runtime'
-      })
-    };
-    
-    // Commented out real API call for now
-    /*
     const authResponse = await fetch(`${swychrBaseURL}/admin/auth`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ functionVersion: FUNCTION_VERSION,
+      body: JSON.stringify({
         email: swychrEmail,
         password: swychrPassword,
       }),
     });
-    */
 
-    // All real API call code commented out for now
-    /*
     console.log('Auth response status:', authResponse.status);
     console.log('Auth response headers:', Object.fromEntries(authResponse.headers.entries()));
 
@@ -256,7 +221,7 @@ exports.handler = async (event, context) => {
     });
 
     console.log('Payment response status:', paymentResponse.status);
-    console.log('Payment response headers:', Object.fromEntries(authResponse.headers.entries()));
+    console.log('Payment response headers:', Object.fromEntries(paymentResponse.headers.entries()));
 
     if (!paymentResponse.ok) {
       const errorText = await paymentResponse.text();
@@ -281,38 +246,31 @@ exports.handler = async (event, context) => {
         ...corsHeaders,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ functionVersion: FUNCTION_VERSION,
+      body: JSON.stringify({
+        functionVersion: FUNCTION_VERSION,
         success: true,
         data: paymentData.data || {},
         message: 'Payment link created successfully',
         swychr_response: paymentData
       }),
     };
-    */
 
   } catch (error) {
     console.error('Swychr create payment error:', error);
     console.error('Error stack:', error.stack);
     
-    // Always return a mock response in case of errors for now
-    console.log('Error occurred - returning mock response as fallback');
     return {
-      statusCode: 200,
+      statusCode: 500,
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ functionVersion: FUNCTION_VERSION,
-        success: true,
-        data: {
-          payment_url: 'https://example.com/test-payment',
-          transaction_id: event.body ? JSON.parse(event.body).transaction_id : 'unknown',
-          status: 'pending'
-        },
-        message: 'Test payment link created successfully (fallback from error)',
-        test_mode: true,
-        original_error: error.message,
-        note: 'Function is running in forced test mode due to environment variable issues'
+      body: JSON.stringify({
+        functionVersion: FUNCTION_VERSION,
+        success: false,
+        error: 'Failed to create payment link',
+        message: error.message,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       }),
     };
   }
