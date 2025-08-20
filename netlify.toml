@@ -88,7 +88,7 @@
   
   # Other
   PORT = "8888"
-  TEST_MODE = "true"
+  TEST_MODE = "false"
   NODE_ENV = "production"
 
 # API redirects to Netlify Functions (must come first)

@@ -1,7 +1,7 @@
 {
   "name": "diginum",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "build:backend": "node backend/build.js",
-    "vercel-build": "npm run build && npm run build:backend",
+
     "netlify-build": "npm run build",
     "start": "node .output/index.js",
     "postinstall": "cd backend && npm install && cd ../netlify/functions && npm install",
