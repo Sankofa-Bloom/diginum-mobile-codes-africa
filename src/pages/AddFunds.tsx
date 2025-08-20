@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CreditCard, ExternalLink } from 'lucide-react';
+import { ArrowLeft, CreditCard, ExternalLink, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -20,11 +20,11 @@ interface AddFundsProps {
 
 export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsProps) {
   const [amount, setAmount] = useState('');
-  const [selectedCurrency, setSelectedCurrency] = useState('USD');
+  const [selectedCurrency, setSelectedCurrency] = useState('XAF');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentUserBalance, setCurrentUserBalance] = useState<number | null>(null);
-  const [paymentLink, setPaymentLink] = useState<string | null>(null);
-  const [transactionId, setTransactionId] = useState<string | null>(null);
+  const [referenceId, setReferenceId] = useState<string | null>(null);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const { toast } = useToast();
   const { user } = useCurrentUser();
@@ -68,23 +68,13 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
       }
       
       // Handle response format from Netlify function
-      // apiClient interceptor returns response.data directly, so response is already the data
       let balance = 0;
       if ((response as any).balance !== undefined) {
         balance = (response as any).balance;
-        if (import.meta.env.DEV) {
-          console.log('Found balance in response.balance:', balance);
-        }
       } else if ((response as any).data?.balance !== undefined) {
         balance = (response as any).data.balance;
-        if (import.meta.env.DEV) {
-          console.log('Found balance in response.data.balance:', balance);
-        }
       } else if (typeof response === 'object' && (response as any).balance !== undefined) {
         balance = (response as any).balance;
-        if (import.meta.env.DEV) {
-          console.log('Found balance in direct response:', balance);
-        }
       }
       
       const finalBalance = parseFloat(balance.toString()) || 0;
@@ -111,6 +101,15 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
       return;
     }
 
+    if (!phoneNumber) {
+      toast({
+        title: "Phone Number Required",
+        description: "Please enter your MTN Mobile Money phone number.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       toast({
@@ -132,7 +131,7 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
           reference: reference,
           amount: numAmount,
           currency: selectedCurrency,
-          payment_method: 'swychr',
+          payment_method: 'mtn_momo',
           status: 'pending',
           description: isOrderPayment 
             ? `Payment for ${orderData.serviceTitle} - ${numAmount} ${selectedCurrency}`
@@ -146,52 +145,47 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
         throw new Error(`Failed to create payment record: ${error.message}`);
       }
 
-      // Create Swychr payment link
-      const paymentResponse = await fetch('/.netlify/functions/swychr-create-payment-v4', {
+      // Create MTN MoMo payment request
+      const paymentResponse = await fetch('/.netlify/functions/momo-payment', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          country_code: 'US', // Default to US, can be made configurable
-          name: user.full_name || user.email?.split('@')[0] || 'User',
-          email: user.email || '',
-          mobile: user.phone || '',
           amount: numAmount,
           currency: selectedCurrency,
+          phone_number: phoneNumber,
           transaction_id: reference,
           description: isOrderPayment 
             ? `Payment for ${orderData.serviceTitle}`
-            : 'Add funds to DigiNum account',
-          pass_digital_charge: false, // Set to true if you want to pass digital charges to user
+            : 'Add funds to DigiNum account'
         }),
       });
 
       if (!paymentResponse.ok) {
         const errorData = await paymentResponse.json();
-        throw new Error(errorData.message || 'Failed to create payment link');
+        throw new Error(errorData.message || 'Failed to initiate payment');
       }
 
       const paymentData = await paymentResponse.json();
 
-      if (!paymentData.success) {
-        throw new Error(paymentData.message || 'Failed to create payment link');
+      if (paymentData.status !== 0) {
+        throw new Error(paymentData.message || 'Failed to initiate payment');
       }
 
-      // Store transaction ID and payment link
-      setTransactionId(reference);
-      setPaymentLink(paymentData.data.payment_url);
+      // Store reference ID for status checks
+      setReferenceId(paymentData.data.reference_id);
 
       toast({
-        title: "Payment Link Created",
-        description: "Click the payment link below to complete your payment.",
+        title: "Payment Initiated",
+        description: "Please check your phone for the MTN MoMo prompt and complete the payment.",
       });
 
     } catch (error) {
       console.error('Add funds error:', error);
       toast({
         title: "Payment Error",
-        description: error instanceof Error ? error.message : "Failed to create payment link",
+        description: error instanceof Error ? error.message : "Failed to initiate payment",
         variant: "destructive",
       });
     } finally {
@@ -204,7 +198,6 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
     try {
       console.log(`Attempting to credit user ${userId} with amount ${amount}`);
       
-      // Use the Netlify function to credit balance
       const response = await apiClient.post('/credit-balance', {
         amount: amount,
         currency: 'USD'
@@ -222,71 +215,14 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
     }
   };
 
-  const handleCheckPayment = async () => {
-    if (!user) return;
-
-    try {
-      // Check for recent pending payments in payment_transactions table
-      const { data: payments, error } = await supabase
-        .from('payment_transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (error) {
-        console.error('Error fetching payments:', error);
-        return;
-      }
-
-      if (!payments || payments.length === 0) {
-        toast({
-          title: "No Pending Payments",
-          description: "You have no pending payments to check.",
-        });
-        return;
-      }
-
-      const payment = payments[0];
-      
-      // Check if payment is still pending (in real app, this would check with payment gateway)
-      if (payment.status === 'pending') {
-        toast({
-          title: "Payment Status",
-          description: `Payment ${payment.reference} is still being processed. Amount: $${payment.amount} USD`,
-        });
-      } else if (payment.status === 'completed') {
-        toast({
-          title: "Payment Completed",
-          description: `Payment ${payment.reference} has been completed. Amount: $${payment.amount} USD`,
-        });
-      }
-
-    } catch (error) {
-      console.error('Payment check error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to check payment status.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Check Swychr payment status
+  // Check MTN MoMo payment status
   const checkPaymentStatus = async () => {
-    if (!transactionId) return;
+    if (!referenceId) return;
 
     setIsCheckingStatus(true);
 
     try {
-      const response = await fetch('/.netlify/functions/swychr-check-status', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ transaction_id: transactionId }),
-      });
+      const response = await fetch(`/.netlify/functions/momo-status?reference_id=${referenceId}`);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -295,26 +231,27 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
 
       const statusData = await response.json();
 
-      if (!statusData.success) {
+      if (statusData.status !== 0) {
         throw new Error(statusData.message || 'Failed to check payment status');
       }
 
       const paymentStatus = statusData.data.status;
 
-      if (paymentStatus === 'completed' || paymentStatus === 'success') {
+      if (paymentStatus === 'SUCCESSFUL') {
         // Payment successful, update database and credit user
         await handlePaymentSuccess();
-      } else if (paymentStatus === 'pending' || paymentStatus === 'processing') {
+      } else if (paymentStatus === 'PENDING') {
         toast({
           title: "Payment Status",
           description: "Payment is still being processed. Please wait...",
         });
-      } else if (paymentStatus === 'failed' || paymentStatus === 'cancelled') {
+      } else if (paymentStatus === 'FAILED') {
         toast({
-          title: "Payment Status",
-          description: "Payment was not successful. Please try again.",
+          title: "Payment Failed",
+          description: "The payment was not successful. Please try again.",
           variant: "destructive",
         });
+        setReferenceId(null);
       } else {
         toast({
           title: "Payment Status",
@@ -336,13 +273,13 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
 
   // Handle successful payment
   const handlePaymentSuccess = async () => {
-    if (!transactionId || !user) return;
+    if (!referenceId || !user) return;
 
     try {
-      // Update payment status to completed using Netlify function
+      // Update payment status to completed
       try {
         const updateResponse = await apiClient.post('/update-payment-status', {
-          reference: transactionId,
+          reference: referenceId,
           status: 'completed'
         });
 
@@ -355,33 +292,32 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
         return;
       }
 
-      // Get the payment amount using Netlify function
+      // Get the payment amount
       try {
-        const paymentResponse = await apiClient.get(`/payment-details?reference=${transactionId}`);
+        const paymentResponse = await apiClient.get(`/payment-details?reference=${referenceId}`);
         
         if ((paymentResponse as any).success && (paymentResponse as any).transaction) {
           const paymentAmount = (paymentResponse as any).transaction.amount;
           
-        // Credit user balance
+          // Credit user balance
           await creditUserBalance(user.id, paymentAmount);
 
-        // Store the payment time for balance refresh detection
-        localStorage.setItem('lastPaymentTime', Date.now().toString());
+          // Store the payment time for balance refresh detection
+          localStorage.setItem('lastPaymentTime', Date.now().toString());
 
-        toast({
-          title: "Payment Successful!",
+          toast({
+            title: "Payment Successful!",
             description: `$${paymentAmount} has been added to your account.`,
-        });
+          });
 
-        // Call the callback to update parent component
+          // Call the callback to update parent component
           onFundsAdded?.(paymentAmount);
 
           // Refresh the current balance display
           fetchCurrentBalance();
 
-          // Clear the payment link and transaction ID
-        setPaymentLink(null);
-        setTransactionId(null);
+          // Clear the reference ID
+          setReferenceId(null);
         } else {
           throw new Error('Failed to get payment details');
         }
@@ -412,10 +348,7 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                        // Navigate back to previous page
-        navigate(-1);
-              }}
+              onClick={() => navigate(-1)}
               className="flex items-center space-x-2"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -440,17 +373,18 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
         <Card className="w-full max-w-md mx-auto">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
-              <CreditCard className="h-5 w-5" />
-              <span>{isOrderPayment ? 'Order Payment' : 'Add Funds'}</span>
+              <Phone className="h-5 w-5" />
+              <span>MTN Mobile Money Payment</span>
             </CardTitle>
             <CardDescription>
               {isOrderPayment 
-                ? `Pay $${orderData.amount} for ${orderData.serviceTitle}`
-                : 'Add funds to your DigiNum account'
+                ? `Pay ${orderData.amount} ${selectedCurrency} for ${orderData.serviceTitle}`
+                : 'Add funds using MTN Mobile Money'
               }
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Amount Input */}
             <div className="space-y-2">
               <Label htmlFor="amount">Amount</Label>
               <div className="flex space-x-2">
@@ -470,14 +404,8 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="USD">USD</SelectItem>
-                    <SelectItem value="EUR">EUR</SelectItem>
-                    <SelectItem value="GBP">GBP</SelectItem>
                     <SelectItem value="XAF">XAF</SelectItem>
-                    <SelectItem value="NGN">NGN</SelectItem>
-                    <SelectItem value="KES">KES</SelectItem>
-                    <SelectItem value="GHS">GHS</SelectItem>
-                    <SelectItem value="EGP">EGP</SelectItem>
+                    <SelectItem value="USD">USD</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -492,6 +420,22 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
                   />
                 </div>
               )}
+            </div>
+
+            {/* Phone Number Input */}
+            <div className="space-y-2">
+              <Label htmlFor="phone">MTN Mobile Money Number</Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="Enter your MTN number"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                className="flex-1"
+              />
+              <p className="text-xs text-muted-foreground">
+                Enter your MTN Mobile Money number in international format (e.g., +237...)
+              </p>
             </div>
             
             {!isOrderPayment && (
@@ -508,62 +452,46 @@ export default function AddFunds({ onFundsAdded, currentBalance = 0 }: AddFundsP
               </div>
             )}
 
-            {!paymentLink ? (
-              <div className="flex space-x-2">
-                <Button 
-                  onClick={handleAddFunds} 
-                  disabled={isProcessing || !amount}
-                  className="flex-1"
-                >
-                  {isProcessing ? 'Processing...' : (isOrderPayment ? 'Pay Now' : 'Add Funds')}
-                </Button>
-              </div>
+            {!referenceId ? (
+              <Button 
+                onClick={handleAddFunds} 
+                disabled={isProcessing || !amount || !phoneNumber}
+                className="w-full"
+              >
+                {isProcessing ? 'Processing...' : (isOrderPayment ? 'Pay Now' : 'Add Funds')}
+              </Button>
             ) : (
               <div className="space-y-4">
-                {/* Payment Link */}
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <h4 className="font-medium text-blue-900 mb-2">Payment Link Created</h4>
-                  <p className="text-sm text-blue-700 mb-3">
-                    Click the button below to complete your payment securely through Swychr.
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <h4 className="font-medium text-yellow-900 mb-2">Payment Initiated</h4>
+                  <p className="text-sm text-yellow-700 mb-3">
+                    Please check your phone for the MTN Mobile Money prompt and complete the payment.
                   </p>
-                  <Button
-                    onClick={() => window.open(paymentLink, '_blank')}
-                    className="w-full bg-blue-600 hover:bg-blue-700"
-                  >
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Complete Payment
-                  </Button>
-                </div>
-
-                {/* Status Check */}
-                <div className="flex space-x-2">
-                  <Button 
-                    onClick={checkPaymentStatus} 
-                    variant="outline"
-                    disabled={isCheckingStatus}
-                    className="flex-1"
-                  >
-                    {isCheckingStatus ? 'Checking...' : 'Check Payment Status'}
-                  </Button>
-                  
-                  <Button 
-                    onClick={() => {
-                      setPaymentLink(null);
-                      setTransactionId(null);
-                    }} 
-                    variant="ghost"
-                  >
-                    Cancel
-                  </Button>
+                  <div className="flex space-x-2">
+                    <Button 
+                      onClick={checkPaymentStatus} 
+                      disabled={isCheckingStatus}
+                      className="flex-1"
+                    >
+                      {isCheckingStatus ? 'Checking...' : 'Check Payment Status'}
+                    </Button>
+                    
+                    <Button 
+                      onClick={() => setReferenceId(null)} 
+                      variant="ghost"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="text-xs text-muted-foreground text-center">
-                  After completing payment, click "Check Payment Status" to verify and credit your account.
+                  After completing payment on your phone, click "Check Payment Status" to verify and credit your account.
                 </div>
               </div>
             )}
 
-            {isOrderPayment && !paymentLink && (
+            {isOrderPayment && !referenceId && (
               <div className="text-xs text-muted-foreground text-center">
                 After payment, your order will be automatically processed.
               </div>
