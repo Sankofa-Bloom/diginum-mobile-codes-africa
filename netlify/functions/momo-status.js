@@ -1,5 +1,4 @@
-const fetch = require('node-fetch');
-const { getAccessToken } = require('./momo-auth');
+const { getMomoClient } = require('./utils/momoClient');
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -47,72 +46,56 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Get access token
-    const { access_token } = await getAccessToken();
+    // Get MoMo client
+    const collections = getMomoClient();
 
-    // Check payment status
-    const baseUrl = process.env.MTN_MOMO_ENVIRONMENT === 'production'
-      ? 'https://momodeveloper.mtn.com'
-      : 'https://sandbox.momodeveloper.mtn.com';
+    try {
+      // Check payment status
+      const paymentStatus = await collections.getTransactionStatus(referenceId);
+      console.log('Payment status:', paymentStatus);
 
-    const statusResponse = await fetch(`${baseUrl}/collection/v1_0/requesttopay/${referenceId}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${access_token}`,
-        'X-Target-Environment': process.env.MTN_MOMO_ENVIRONMENT,
-        'Ocp-Apim-Subscription-Key': process.env.MTN_MOMO_SUBSCRIPTION_KEY
-      }
-    });
-
-    if (!statusResponse.ok) {
-      const errorText = await statusResponse.text();
-      console.error('Status check failed:', {
-        status: statusResponse.status,
-        error: errorText
-      });
+      // Map MTN MoMo status to our status format
+      const statusMap = {
+        'SUCCESSFUL': 'SUCCESSFUL',
+        'FAILED': 'FAILED',
+        'PENDING': 'PENDING',
+        'TIMEOUT': 'FAILED',
+        'REJECTED': 'FAILED'
+      };
 
       return {
-        statusCode: statusResponse.status,
+        statusCode: 200,
+        headers: corsHeaders,
+        body: JSON.stringify({
+          status: 0,
+          message: 'Payment status retrieved successfully',
+          data: {
+            reference_id: referenceId,
+            status: statusMap[paymentStatus.status] || paymentStatus.status,
+            amount: paymentStatus.amount,
+            currency: paymentStatus.currency,
+            payer: paymentStatus.payer,
+            payerMessage: paymentStatus.payerMessage,
+            payeeNote: paymentStatus.payeeNote,
+            externalId: paymentStatus.externalId,
+            reason: paymentStatus.reason
+          }
+        })
+      };
+
+    } catch (error) {
+      console.error('MoMo API error:', error);
+      
+      return {
+        statusCode: error.statusCode || 500,
         headers: corsHeaders,
         body: JSON.stringify({
           status: 1,
-          message: 'Failed to check payment status',
+          message: error.message || 'Failed to check payment status',
           data: null
         })
       };
     }
-
-    const statusData = await statusResponse.json();
-    console.log('Payment status:', statusData);
-
-    // Map MTN MoMo status to our status format
-    const statusMap = {
-      'SUCCESSFUL': 'SUCCESSFUL',
-      'FAILED': 'FAILED',
-      'PENDING': 'PENDING',
-      'TIMEOUT': 'FAILED',
-      'REJECTED': 'FAILED'
-    };
-
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({
-        status: 0,
-        message: 'Payment status retrieved successfully',
-        data: {
-          reference_id: referenceId,
-          status: statusMap[statusData.status] || statusData.status,
-          amount: statusData.amount,
-          currency: statusData.currency,
-          payer: statusData.payer,
-          payerMessage: statusData.payerMessage,
-          payeeNote: statusData.payeeNote,
-          externalId: statusData.externalId,
-          reason: statusData.reason
-        }
-      })
-    };
 
   } catch (error) {
     console.error('Status check error:', error);
