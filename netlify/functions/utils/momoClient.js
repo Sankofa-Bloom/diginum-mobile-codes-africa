@@ -23,53 +23,15 @@ function getMomoClient() {
         callbackUrl: callbackUrl
       });
       
-      console.log('MoMo client created successfully');
-      console.log('Client keys:', Object.keys(momoClient));
-      console.log('Client type:', typeof momoClient);
+      console.log('MoMo client created successfully. Keys:', Object.keys(momoClient));
       
-      // Try different ways to find the requestToPay method
-      if (momoClient.requestToPay) {
-        console.log('requestToPay found directly on client');
-      } else if (momoClient.collection && momoClient.collection.requestToPay) {
-        console.log('requestToPay found on client.collection');
-        momoClient = momoClient.collection;
-      } else if (momoClient.collections && momoClient.collections.requestToPay) {
-        console.log('requestToPay found on client.collections');
-        momoClient = momoClient.collections;
+      // Based on the debugging info, we need to use the Collections property
+      if (momoClient.Collections) {
+        console.log('Using Collections client for payment operations');
+        momoClient = momoClient.Collections;
+        console.log('Collections client methods:', Object.keys(momoClient));
       } else {
-        // Let's try to find any method that might be the payment method
-        const allMethods = [];
-        
-        function findMethods(obj, prefix = '') {
-          if (!obj || typeof obj !== 'object') return;
-          
-          Object.keys(obj).forEach(key => {
-            const value = obj[key];
-            const fullKey = prefix ? `${prefix}.${key}` : key;
-            
-            if (typeof value === 'function') {
-              allMethods.push(fullKey);
-            } else if (typeof value === 'object' && value !== null) {
-              findMethods(value, fullKey);
-            }
-          });
-        }
-        
-        findMethods(momoClient);
-        console.log('All available methods:', allMethods);
-        
-        // Common alternatives for requestToPay
-        const alternatives = [
-          'pay', 'requestPayment', 'charge', 'createPayment', 
-          'requestToPay', 'request_to_pay', 'requestToPayV2'
-        ];
-        
-        for (const alt of alternatives) {
-          if (allMethods.includes(alt)) {
-            console.log(`Found alternative method: ${alt}`);
-            break;
-          }
-        }
+        throw new Error('Collections client not found in mtn-momo response');
       }
     } catch (error) {
       console.error('Error creating MoMo client:', error);

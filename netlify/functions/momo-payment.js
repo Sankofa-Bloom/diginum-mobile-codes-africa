@@ -88,31 +88,13 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Get MoMo client
+    // Get MoMo client (should now return the Collections client)
     const collections = getMomoClient();
-    
-    // IMMEDIATE DEBUG: Check if requestToPay method exists BEFORE doing anything else
-    if (!collections || typeof collections.requestToPay !== 'function') {
-      const availableMethods = collections ? Object.keys(collections).filter(key => typeof collections[key] === 'function') : [];
-      const errorMsg = `❌ DEBUGGING: requestToPay method not found. Client type: ${typeof collections}. Available methods: ${availableMethods.join(', ')}. All keys: ${Object.keys(collections || {}).join(', ')}`;
-      console.error(errorMsg);
-      
-      return {
-        statusCode: 500,
-        headers: corsHeaders,
-        body: JSON.stringify({
-          status: 1,
-          message: errorMsg,
-          data: null
-        })
-      };
-    }
 
     // Generate reference ID
     const referenceId = uuidv4();
 
     try {
-      
       // Request to pay
       const paymentResponse = await collections.requestToPay({
         amount: amount.toString(),
