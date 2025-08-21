@@ -24,6 +24,19 @@ function getMomoClient() {
       });
       
       console.log('MoMo client created successfully. Available methods:', Object.keys(momoClient));
+      
+      // Check if client has collection property
+      if (momoClient.collection) {
+        console.log('Found collection property. Collection methods:', Object.keys(momoClient.collection));
+        // Return the collection instead of the main client
+        momoClient = momoClient.collection;
+      } else if (momoClient.collections) {
+        console.log('Found collections property. Collections methods:', Object.keys(momoClient.collections));
+        // Return the collections instead of the main client
+        momoClient = momoClient.collections;
+      } else {
+        console.log('No collection/collections property found. Client methods:', Object.keys(momoClient));
+      }
     } catch (error) {
       console.error('Error creating MoMo client:', error);
       throw error;
