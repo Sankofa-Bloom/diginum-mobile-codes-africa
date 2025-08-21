@@ -28,8 +28,25 @@ function getMomoClient() {
       // Based on the debugging info, we need to use the Collections property
       if (momoClient.Collections) {
         console.log('Using Collections client for payment operations');
-        momoClient = momoClient.Collections;
-        console.log('Collections client methods:', Object.keys(momoClient));
+        const collectionsClient = momoClient.Collections;
+        console.log('Collections client type:', typeof collectionsClient);
+        console.log('Collections client keys:', Object.keys(collectionsClient));
+        
+        // Check if it's a function that needs to be called
+        if (typeof collectionsClient === 'function') {
+          console.log('Collections is a function, calling it...');
+          momoClient = collectionsClient();
+          console.log('Collections() result keys:', Object.keys(momoClient));
+        } else {
+          momoClient = collectionsClient;
+        }
+        
+        // Final check for requestToPay
+        console.log('Final client has requestToPay?', typeof momoClient.requestToPay);
+        if (!momoClient.requestToPay) {
+          const methods = Object.keys(momoClient).filter(key => typeof momoClient[key] === 'function');
+          throw new Error(`requestToPay still not found on Collections. Available methods: ${methods.join(', ')}`);
+        }
       } else {
         throw new Error('Collections client not found in mtn-momo response');
       }

@@ -91,6 +91,21 @@ exports.handler = async (event, context) => {
     // Get MoMo client (should now return the Collections client)
     const collections = getMomoClient();
 
+    // Safety check before proceeding
+    if (!collections || typeof collections.requestToPay !== 'function') {
+      const errorMsg = `Collections client invalid. Type: ${typeof collections}, has requestToPay: ${typeof collections?.requestToPay}`;
+      console.error(errorMsg);
+      return {
+        statusCode: 500,
+        headers: corsHeaders,
+        body: JSON.stringify({
+          status: 1,
+          message: errorMsg,
+          data: null
+        })
+      };
+    }
+
     // Generate reference ID
     const referenceId = uuidv4();
 
