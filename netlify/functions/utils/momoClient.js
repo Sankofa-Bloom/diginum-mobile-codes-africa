@@ -10,13 +10,17 @@ function getMomoClient() {
   if (!momoClient) {
     try {
       // Use the create function to initialize Collections client
+      const callbackUrl = process.env.MTN_MOMO_CALLBACK_URL;
+      const callbackHost = callbackUrl ? new URL(callbackUrl).hostname : 'diginum.netlify.app';
+      
       momoClient = create({
         product: 'collection',
         environment: process.env.MTN_MOMO_ENVIRONMENT || 'sandbox',
         primaryKey: process.env.MTN_MOMO_API_KEY,
         userSecret: process.env.MTN_MOMO_API_SECRET,
         userId: process.env.MTN_MOMO_USER_ID,
-        callbackUrl: process.env.MTN_MOMO_CALLBACK_URL
+        callbackHost: callbackHost,
+        callbackUrl: callbackUrl
       });
       
       console.log('MoMo client created successfully. Available methods:', Object.keys(momoClient));
