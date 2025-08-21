@@ -9,6 +9,27 @@ let momoClient = null;
 function getMomoClient() {
   if (!momoClient) {
     try {
+      // Check all required environment variables
+      const requiredEnvVars = {
+        MTN_MOMO_API_KEY: process.env.MTN_MOMO_API_KEY,
+        MTN_MOMO_API_SECRET: process.env.MTN_MOMO_API_SECRET,
+        MTN_MOMO_USER_ID: process.env.MTN_MOMO_USER_ID,
+        MTN_MOMO_CALLBACK_URL: process.env.MTN_MOMO_CALLBACK_URL
+      };
+      
+      console.log('Environment variables check:');
+      Object.entries(requiredEnvVars).forEach(([key, value]) => {
+        console.log(`${key}: ${value ? 'SET' : 'MISSING'}`);
+      });
+      
+      const missingVars = Object.entries(requiredEnvVars)
+        .filter(([key, value]) => !value)
+        .map(([key]) => key);
+      
+      if (missingVars.length > 0) {
+        throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+      }
+      
       // Use the create function to initialize Collections client
       const callbackUrl = process.env.MTN_MOMO_CALLBACK_URL;
       const callbackHost = callbackUrl ? new URL(callbackUrl).hostname : 'diginum.netlify.app';
