@@ -90,11 +90,21 @@ exports.handler = async (event, context) => {
 
     // Get MoMo client
     const collections = getMomoClient();
+    
+    console.log('MoMo client received in payment function. Type:', typeof collections);
+    console.log('MoMo client keys:', Object.keys(collections || {}));
+    console.log('requestToPay available?', typeof collections?.requestToPay);
 
     // Generate reference ID
     const referenceId = uuidv4();
 
     try {
+      // Check if requestToPay method exists
+      if (!collections || typeof collections.requestToPay !== 'function') {
+        const availableMethods = collections ? Object.keys(collections).filter(key => typeof collections[key] === 'function') : [];
+        throw new Error(`requestToPay method not found. Available methods: ${availableMethods.join(', ')}`);
+      }
+      
       // Request to pay
       const paymentResponse = await collections.requestToPay({
         amount: amount.toString(),

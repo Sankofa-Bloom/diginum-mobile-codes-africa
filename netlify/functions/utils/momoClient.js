@@ -23,19 +23,53 @@ function getMomoClient() {
         callbackUrl: callbackUrl
       });
       
-      console.log('MoMo client created successfully. Available methods:', Object.keys(momoClient));
+      console.log('MoMo client created successfully');
+      console.log('Client keys:', Object.keys(momoClient));
+      console.log('Client type:', typeof momoClient);
       
-      // Check if client has collection property
-      if (momoClient.collection) {
-        console.log('Found collection property. Collection methods:', Object.keys(momoClient.collection));
-        // Return the collection instead of the main client
+      // Try different ways to find the requestToPay method
+      if (momoClient.requestToPay) {
+        console.log('requestToPay found directly on client');
+      } else if (momoClient.collection && momoClient.collection.requestToPay) {
+        console.log('requestToPay found on client.collection');
         momoClient = momoClient.collection;
-      } else if (momoClient.collections) {
-        console.log('Found collections property. Collections methods:', Object.keys(momoClient.collections));
-        // Return the collections instead of the main client
+      } else if (momoClient.collections && momoClient.collections.requestToPay) {
+        console.log('requestToPay found on client.collections');
         momoClient = momoClient.collections;
       } else {
-        console.log('No collection/collections property found. Client methods:', Object.keys(momoClient));
+        // Let's try to find any method that might be the payment method
+        const allMethods = [];
+        
+        function findMethods(obj, prefix = '') {
+          if (!obj || typeof obj !== 'object') return;
+          
+          Object.keys(obj).forEach(key => {
+            const value = obj[key];
+            const fullKey = prefix ? `${prefix}.${key}` : key;
+            
+            if (typeof value === 'function') {
+              allMethods.push(fullKey);
+            } else if (typeof value === 'object' && value !== null) {
+              findMethods(value, fullKey);
+            }
+          });
+        }
+        
+        findMethods(momoClient);
+        console.log('All available methods:', allMethods);
+        
+        // Common alternatives for requestToPay
+        const alternatives = [
+          'pay', 'requestPayment', 'charge', 'createPayment', 
+          'requestToPay', 'request_to_pay', 'requestToPayV2'
+        ];
+        
+        for (const alt of alternatives) {
+          if (allMethods.includes(alt)) {
+            console.log(`Found alternative method: ${alt}`);
+            break;
+          }
+        }
       }
     } catch (error) {
       console.error('Error creating MoMo client:', error);
