@@ -34,7 +34,14 @@ function getMomoClient() {
       const callbackUrl = process.env.MTN_MOMO_CALLBACK_URL;
       const callbackHost = callbackUrl ? new URL(callbackUrl).hostname : 'diginum.netlify.app';
       
-      momoClient = create({
+      // Debug the environment variables before creating client
+      console.log('Environment variables before creating client:');
+      console.log('MTN_MOMO_API_KEY:', process.env.MTN_MOMO_API_KEY ? 'SET (' + process.env.MTN_MOMO_API_KEY.substring(0, 8) + '...)' : 'UNDEFINED');
+      console.log('MTN_MOMO_API_SECRET:', process.env.MTN_MOMO_API_SECRET ? 'SET (' + process.env.MTN_MOMO_API_SECRET.substring(0, 8) + '...)' : 'UNDEFINED');
+      console.log('MTN_MOMO_USER_ID:', process.env.MTN_MOMO_USER_ID ? 'SET (' + process.env.MTN_MOMO_USER_ID.substring(0, 8) + '...)' : 'UNDEFINED');
+      console.log('MTN_MOMO_ENVIRONMENT:', process.env.MTN_MOMO_ENVIRONMENT || 'UNDEFINED');
+      
+      const clientConfig = {
         product: 'collection',
         environment: process.env.MTN_MOMO_ENVIRONMENT || 'sandbox',
         primaryKey: process.env.MTN_MOMO_API_KEY,
@@ -42,7 +49,15 @@ function getMomoClient() {
         userId: process.env.MTN_MOMO_USER_ID,
         callbackHost: callbackHost,
         callbackUrl: callbackUrl
+      };
+      
+      console.log('Client config being passed to create():', {
+        ...clientConfig,
+        primaryKey: clientConfig.primaryKey ? clientConfig.primaryKey.substring(0, 8) + '...' : 'UNDEFINED',
+        userSecret: clientConfig.userSecret ? clientConfig.userSecret.substring(0, 8) + '...' : 'UNDEFINED'
       });
+      
+      momoClient = create(clientConfig);
       
       console.log('MoMo client created successfully. Keys:', Object.keys(momoClient));
       
